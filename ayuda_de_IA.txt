@@ -1,0 +1,7 @@
+Santiago Serrano Montalvo A01751347
+
+Le solicite ayuda a Claude para:
+
+Entnder el modelo 
+Ayuda de sintaxis para optimización sin frameworks
+Elaborar el archivo de reporte.pdf ( mi original es el md )
