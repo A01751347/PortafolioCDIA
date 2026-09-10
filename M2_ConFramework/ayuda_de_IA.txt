@@ -1,0 +1,7 @@
+Santiago Serrano Montalvo A01751347
+
+Le solicite ayuda a Claude para:
+
+Entender como funciona Random Forest
+Ayuda de sintaxis para usar scikit-learn (RandomForestClassifier, train_test_split, cross_val_score)
+Elaborar el archivo de reporte.pdf ( mi original es el md )
