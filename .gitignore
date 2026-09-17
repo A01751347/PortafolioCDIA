@@ -1,0 +1,6 @@
+# Dataset GTSRB: se descarga y se prepara con M2_DeepLearning/preparar_datos.py
+M2_DeepLearning/datos/
+
+__pycache__/
+*.pyc
+.DS_Store
