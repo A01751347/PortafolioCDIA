@@ -1,0 +1,13 @@
+Santiago Serrano Montalvo A01751347
+
+Entrega: Analisis y Reporte sobre el desempeño del modelo
+
+Le solicite ayuda a Claude para:
+
+- Entender como se diagnostican el sesgo y la varianza a partir de la brecha
+  entre entrenamiento y validacion, y donde poner los umbrales.
+- Sintaxis de matplotlib para las curvas de aprendizaje y las curvas de
+  validacion (la parte de sombrear la brecha y marcar el mejor punto).
+- Revisar que el conjunto de prueba no se estuviera usando para elegir
+  hiperparametros.
+- Dar formato al reporte en PDF (mi original es el .md).
