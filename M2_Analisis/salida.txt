@@ -1,39 +1,27 @@
+================================================================================
+ 1. PARTICION EN TRES CONJUNTOS
+================================================================================
+ Modelo analizado: Random Forest (entrega con framework)
+ Metrica: F1 macro
 
-======================================================================================
- PARTE 1 - PARTICION EN ENTRENAMIENTO / VALIDACION / PRUEBA
-======================================================================================
- Dataset          : interest_ledger.csv (10576 registros)
- Modelo analizado : Random Forest (entrega con framework)
- Metrica principal: F1 macro
+ conjunto                n        %
+ Entrenamiento        6345      60%
+ Validacion           2115      20%
+ Prueba               2116      20%
 
- conjunto                n % del total
- Entrenamiento        6345        60%
- Validacion           2115        20%
- Prueba               2116        20%
+ Proporcion de cada clase (stratify la conserva igual en los tres):
+ clase         entrenamiento   validacion     prueba
+ DEMO                   2.2%         2.2%       2.2%
+ FLOTILLA              34.3%        34.3%      34.3%
+ NUEVO                 42.5%        42.5%      42.5%
+ REFACC                 2.4%         2.5%       2.5%
+ SEMINUEVOS            18.6%        18.6%      18.6%
 
- Proporcion de cada clase en los tres conjuntos (stratify la conserva):
- clase         entrenamiento     validacion         prueba
- DEMO                   2.2%           2.2%           2.2%
- FLOTILLA              34.3%          34.3%          34.3%
- NUEVO                 42.5%          42.5%          42.5%
- REFACC                 2.4%           2.5%           2.5%
- SEMINUEVOS            18.6%          18.6%          18.6%
-
-======================================================================================
- PARTE 2 - MODELO BASE SIN REGULARIZAR
-======================================================================================
- Configuracion de partida (arboles sin ninguna restriccion):
-   n_estimators         300
-   max_depth            None
-   min_samples_leaf     1
-   max_features         sqrt
-   ccp_alpha            0.0
-   class_weight         None
-
- Estructura del bosque resultante:
-   profundidad media 26.0 (maxima 35)
-   hojas por arbol   825  sobre 6345 registros de entrenamiento
-   -> 7.7 registros por hoja en promedio: el bosque esta memorizando
+================================================================================
+ 2. MODELO BASE SIN REGULARIZAR
+================================================================================
+ Arboles sin restriccion: profundidad media 26.0 | hojas por arbol 825
+ Eso deja 7.7 registros por hoja: el bosque esta memorizando.
 
  conjunto             accuracy     F1 macro
  train                  99.53%       0.9975
@@ -41,181 +29,139 @@
  test                   87.29%       0.8163
 
    DIAGNOSTICO DEL MODELO BASE
-     F1 macro entrenamiento : 0.9975
-     F1 macro validacion    : 0.7866
-     Brecha (train - val)   : 0.2109
-     -> SESGO    : BAJO   (regla: F1 train >= 0.95 bajo, >= 0.8 medio)
-     -> VARIANZA : ALTA   (regla: brecha < 0.03 baja, < 0.1 media)
-     -> AJUSTE   : OVERFITTING
+     F1 macro entrenamiento: 0.9975
+     F1 macro validacion   : 0.7866
+     Brecha                : 0.2109
+     -> SESGO   : BAJO
+     -> VARIANZA: ALTA
+     -> AJUSTE  : OVERFITTING
 
-======================================================================================
- PARTE 3 - CURVA DE APRENDIZAJE DEL MODELO BASE
-======================================================================================
+================================================================================
+ 3. CURVA DE APRENDIZAJE DEL MODELO BASE
+================================================================================
 
-    n train       F1 train  F1 validacion      F1 prueba     brecha
-        317         1.0000         0.6679         0.6660     0.3321
-        634         0.9983         0.7248         0.7066     0.2735
-       1269         0.9992         0.7512         0.7455     0.2480
-       2220         0.9988         0.7507         0.7489     0.2481
-       3172         0.9982         0.7826         0.7745     0.2156
-       4441         0.9979         0.7891         0.7976     0.2088
-       5393         0.9976         0.7906         0.8177     0.2069
-       6345         0.9975         0.7866         0.8163     0.2109
+    n train     F1 train  F1 validacion    F1 prueba    brecha
+        317       1.0000         0.6679       0.6660    0.3321
+        634       0.9983         0.7248       0.7066    0.2735
+       1269       0.9992         0.7512       0.7455    0.2480
+       2220       0.9988         0.7507       0.7489    0.2481
+       3172       0.9982         0.7826       0.7745    0.2156
+       4441       0.9979         0.7891       0.7976    0.2088
+       5393       0.9976         0.7906       0.8177    0.2069
+       6345       0.9975         0.7866       0.8163    0.2109
 
-======================================================================================
- PARTE 4 - CURVAS DE VALIDACION: EFECTO DE CADA HIPERPARAMETRO
-======================================================================================
- Cada curva varia un solo hiperparametro dejando los demas en su valor base.
- El eje x va del modelo MENOS flexible (izquierda) al MAS flexible (derecha).
+================================================================================
+ 4. EFECTO DE CADA HIPERPARAMETRO
+================================================================================
 
    Variando max_depth:
-            valor       F1 train         F1 val     brecha
-                2         0.5821         0.5876    -0.0054
-                4         0.6591         0.6575     0.0016
-                6         0.7027         0.6952     0.0075
-                8         0.7318         0.7066     0.0252
-               12         0.8553         0.7429     0.1125
-               16         0.9778         0.7865     0.1912
-               20         0.9966         0.7901     0.2065
-               25         0.9975         0.7882     0.2093
-             None         0.9975         0.7866     0.2109
+          valor     F1 train       F1 val    brecha
+              2       0.5821       0.5876   -0.0054
+              4       0.6591       0.6575    0.0016
+              6       0.7027       0.6952    0.0075
+              8       0.7318       0.7066    0.0252
+             12       0.8553       0.7429    0.1125
+             16       0.9778       0.7865    0.1912
+             20       0.9966       0.7901    0.2065
+             25       0.9975       0.7882    0.2093
+           None       0.9975       0.7866    0.2109
 
    Variando min_samples_leaf:
-            valor       F1 train         F1 val     brecha
-               50         0.6913         0.6931    -0.0018
-               25         0.7029         0.6955     0.0074
-               10         0.7297         0.7082     0.0215
-                5         0.8123         0.7256     0.0867
-                3         0.8761         0.7458     0.1303
-                2         0.9376         0.7675     0.1700
-                1         0.9975         0.7866     0.2109
+          valor     F1 train       F1 val    brecha
+             50       0.6913       0.6931   -0.0018
+             25       0.7029       0.6955    0.0074
+             10       0.7297       0.7082    0.0215
+              5       0.8123       0.7256    0.0867
+              3       0.8761       0.7458    0.1303
+              2       0.9376       0.7675    0.1700
+              1       0.9975       0.7866    0.2109
 
    Variando ccp_alpha:
-            valor       F1 train         F1 val     brecha
-             0.01         0.6372         0.6476    -0.0104
-            0.005         0.6770         0.6819    -0.0049
-            0.002         0.6896         0.6950    -0.0054
-            0.001         0.7162         0.7047     0.0115
-           0.0005         0.8226         0.7321     0.0905
-           0.0002         0.9699         0.7599     0.2100
-              0.0         0.9975         0.7866     0.2109
+          valor     F1 train       F1 val    brecha
+           0.01       0.6372       0.6476   -0.0104
+          0.005       0.6770       0.6819   -0.0049
+          0.002       0.6896       0.6950   -0.0054
+          0.001       0.7162       0.7047    0.0115
+         0.0005       0.8226       0.7321    0.0905
+         0.0002       0.9699       0.7599    0.2100
+            0.0       0.9975       0.7866    0.2109
 
    Variando max_features:
-            valor       F1 train         F1 val     brecha
-                1         0.9975         0.7890     0.2086
-                2         0.9975         0.7866     0.2109
-                3         0.9975         0.8138     0.1837
-                4         0.9975         0.8420     0.1556
-                5         0.9975         0.8468     0.1507
+          valor     F1 train       F1 val    brecha
+              1       0.9975       0.7890    0.2086
+              2       0.9975       0.7866    0.2109
+              3       0.9975       0.8138    0.1837
+              4       0.9975       0.8420    0.1556
+              5       0.9975       0.8468    0.1507
    figura guardada: figuras/curvas_validacion.png
 
-======================================================================================
- PARTE 5 - BUSQUEDA DE LA MEJOR REGULARIZACION
-======================================================================================
+================================================================================
+ 5. BUSQUEDA DE LA MEJOR REGULARIZACION
+================================================================================
 
-   Evaluando 192 combinaciones sobre el conjunto de validacion...
-      15/192 combinaciones (6s)
-      30/192 combinaciones (13s)
-      45/192 combinaciones (19s)
-      60/192 combinaciones (26s)
-      75/192 combinaciones (33s)
-      90/192 combinaciones (40s)
-      105/192 combinaciones (47s)
-      120/192 combinaciones (56s)
-      135/192 combinaciones (64s)
-      150/192 combinaciones (74s)
-      165/192 combinaciones (83s)
-      180/192 combinaciones (92s)
+   Probando 18 combinaciones sobre validacion...
 
-   Las 12 mejores combinaciones por F1 macro en VALIDACION:
-    max_feat  max_depth  min_leaf  ccp_alpha         class_weight  F1 train    F1 val   brecha
-           5         25         1     0.0002                 None    0.9811    0.8510   0.1300
-           5       None         1     0.0002                 None    0.9811    0.8510   0.1300
-           5         25         1        0.0                 None    0.9975    0.8479   0.1497
-           5       None         1        0.0                 None    0.9975    0.8468   0.1507
-           5         25         2     0.0002   balanced_subsample    0.9635    0.8431   0.1204
-           5       None         2     0.0002   balanced_subsample    0.9635    0.8425   0.1210
-           4       None         1        0.0                 None    0.9975    0.8420   0.1556
-           4         25         1        0.0                 None    0.9975    0.8412   0.1563
-           5         16         1        0.0                 None    0.9833    0.8409   0.1425
-           5       None         1        0.0   balanced_subsample    0.9975    0.8366   0.1609
-           5         16         2        0.0   balanced_subsample    0.9596    0.8359   0.1237
-           5       None         1     0.0002   balanced_subsample    0.9737    0.8354   0.1383
+     max_feat  max_depth  ccp_alpha   F1 train    F1 val    brecha
+            5         25     0.0002     0.9811    0.8510    0.1300
+            5       None     0.0002     0.9811    0.8510    0.1300
+            5         25        0.0     0.9975    0.8479    0.1497
+            5       None        0.0     0.9975    0.8468    0.1507
+            3         25        0.0     0.9975    0.8151    0.1824
+            3       None        0.0     0.9975    0.8138    0.1837
+            5         12        0.0     0.9016    0.8079    0.0937
+            3         25     0.0002     0.9757    0.8074    0.1683
+            3       None     0.0002     0.9764    0.8043    0.1722
+            5         12     0.0002     0.8921    0.7964    0.0957
+            2         25        0.0     0.9975    0.7882    0.2093
+            2       None        0.0     0.9975    0.7866    0.2109
+            2         25     0.0002     0.9704    0.7723    0.1981
+            2       None     0.0002     0.9699    0.7599    0.2100
+            3         12        0.0     0.8743    0.7433    0.1310
+            2         12        0.0     0.8553    0.7429    0.1125
+            2         12     0.0002     0.8395    0.7427    0.0968
+            3         12     0.0002     0.8638    0.7427    0.1211
 
-   Mejor configuracion con brecha <= 0.1 (varianza no alta):
-      max_features=5 max_depth=12 min_leaf=1 ccp_alpha=0.0 pesos=None
-      F1 train 0.9016 | F1 val 0.8079 | brecha 0.0937
-   figura guardada: figuras/frontera_varianza_desempeno.png
-
-======================================================================================
- PARTE 6 - MODELO REGULARIZADO
-======================================================================================
- Configuracion elegida por F1 macro en VALIDACION:
-   max_depth            25   <-- cambio (antes None)
-   min_samples_leaf     1
-   ccp_alpha            0.0002   <-- cambio (antes 0.0)
-   class_weight         None
-   max_features         5   <-- cambio (antes sqrt)
-   n_estimators         300
-
- Estructura del bosque regularizado:
-   profundidad media 23.1 (maxima 25)
-   hojas por arbol   468
-   -> 13.5 registros por hoja en promedio
+================================================================================
+ 6. MODELO REGULARIZADO
+================================================================================
+ Configuracion elegida: {'max_features': 5, 'max_depth': 25, 'ccp_alpha': 0.0002}
+ Hojas por arbol: 468 -> 13.5 registros por hoja (antes eran menos)
 
    DIAGNOSTICO DEL MODELO REGULARIZADO
-     F1 macro entrenamiento : 0.9811
-     F1 macro validacion    : 0.8510
-     Brecha (train - val)   : 0.1300
-     -> SESGO    : BAJO   (regla: F1 train >= 0.95 bajo, >= 0.8 medio)
-     -> VARIANZA : ALTA   (regla: brecha < 0.03 baja, < 0.1 media)
-     -> AJUSTE   : OVERFITTING
+     F1 macro entrenamiento: 0.9811
+     F1 macro validacion   : 0.851
+     Brecha                : 0.13
+     -> SESGO   : BAJO
+     -> VARIANZA: ALTA
+     -> AJUSTE  : OVERFITTING
 
- ------------------------------------------------------------------------------------
- VARIANTE CONSERVADORA (regularizada hasta bajar la varianza a MEDIA)
- ------------------------------------------------------------------------------------
- Configuracion: {'max_depth': 12, 'min_samples_leaf': 1, 'ccp_alpha': 0.0, 'class_weight': None, 'max_features': 5}
-
-   DIAGNOSTICO DE LA VARIANTE CONSERVADORA
-     F1 macro entrenamiento : 0.9016
-     F1 macro validacion    : 0.8079
-     Brecha (train - val)   : 0.0937
-     -> SESGO    : MEDIO   (regla: F1 train >= 0.95 bajo, >= 0.8 medio)
-     -> VARIANZA : MEDIA   (regla: brecha < 0.03 baja, < 0.1 media)
-     -> AJUSTE   : FITTING con sobreajuste leve
-
-     Lectura: forzar la brecha por debajo de 0.1 si logra el diagnostico de
-     varianza MEDIA, pero cuesta 0.0408 de F1 macro en PRUEBA frente al modelo
-     elegido. Es el intercambio sesgo-varianza en numeros: el conjunto de
-     prueba premia al modelo flexible aunque su brecha sea mayor.
-
-    n train       F1 train  F1 validacion      F1 prueba     brecha
-        317         1.0000         0.6827         0.6776     0.3173
-        634         0.9983         0.7168         0.6948     0.2816
-       1269         0.9992         0.7480         0.7289     0.2512
-       2220         0.9988         0.7878         0.7683     0.2110
-       3172         0.9980         0.8142         0.7864     0.1838
-       4441         0.9947         0.8386         0.8192     0.1561
-       5393         0.9818         0.8341         0.8329     0.1476
-       6345         0.9811         0.8510         0.8381     0.1300
+    n train     F1 train  F1 validacion    F1 prueba    brecha
+        317       1.0000         0.6827       0.6776    0.3173
+        634       0.9983         0.7168       0.6948    0.2816
+       1269       0.9992         0.7480       0.7289    0.2512
+       2220       0.9988         0.7878       0.7683    0.2110
+       3172       0.9980         0.8142       0.7864    0.1838
+       4441       0.9947         0.8386       0.8192    0.1561
+       5393       0.9818         0.8341       0.8329    0.1476
+       6345       0.9811         0.8510       0.8381    0.1300
    figura guardada: figuras/curvas_aprendizaje.png
 
-======================================================================================
- PARTE 7 - COMPARACION ANTES / DESPUES
-======================================================================================
-                                   ANTES        DESPUES       cambio
- F1 macro entrenamiento           0.9975         0.9811      -0.0164
- F1 macro validacion              0.7866         0.8510      +0.0645
- F1 macro PRUEBA                  0.8163         0.8381      +0.0218
- Accuracy PRUEBA                  0.8729         0.8785      +0.0057
- Brecha train - val               0.2109         0.1300      -0.0809
+================================================================================
+ 7. COMPARACION ANTES / DESPUES
+================================================================================
+                                 ANTES      DESPUES     cambio
+ F1 macro entrenamiento         0.9975       0.9811    -0.0164
+ F1 macro validacion            0.7866       0.8510    +0.0645
+ F1 macro PRUEBA                0.8163       0.8381    +0.0218
+ Accuracy PRUEBA                0.8729       0.8785    +0.0057
+ Brecha train - val             0.2109       0.1300    -0.0809
 
-                                   ANTES        DESPUES
- Sesgo                              BAJO           BAJO
- Varianza                           ALTA           ALTA
- Ajuste                      OVERFITTING    OVERFITTING
+                                 ANTES      DESPUES
+ Sesgo                            BAJO         BAJO
+ Varianza                         ALTA         ALTA
+ Ajuste                    OVERFITTING  OVERFITTING
 
- Reporte por clase en el conjunto de PRUEBA (modelo regularizado):
+ Reporte por clase en PRUEBA (modelo regularizado):
               precision    recall  f1-score   support
 
         DEMO      0.864     0.413     0.559        46
@@ -239,53 +185,39 @@ weighted avg      0.881     0.879     0.877      2116
    figura guardada: figuras/matrices_antes_despues.png
    figura guardada: figuras/f1_por_clase.png
 
-======================================================================================
- PARTE 8 - VERIFICACION EXTRA: FUGA DE DATOS POR VEHICULO REPETIDO
-======================================================================================
- Con la particion ALEATORIA usada arriba:
-   filas de prueba cuyo vehiculo tambien aparece en entrenamiento: 1585 de 2116 (74.9%)
+================================================================================
+ 8. REVISION EXTRA: VEHICULOS REPETIDOS
+================================================================================
+ Filas de prueba cuyo vehiculo tambien esta en entrenamiento: 1585 de 2116 (75%)
 
- particion                                            base regularizado
- aleatoria (la del analisis)                        0.8163       0.8381
- agrupada por VIN (sin vehiculos repetidos)         0.8045       0.8116
+ particion                                      F1 macro
+ aleatoria (la del analisis)                      0.8381
+ agrupada por VIN                                 0.8116
 
- La caida de 0.0265 entre las dos filas es la parte del desempeño que
- venia de reconocer vehiculos ya vistos y no de generalizar a creditos nuevos.
-
- Con la particion honesta la regularizacion aporta +0.0071 de F1 macro,
- contra +0.0218 en la particion aleatoria: al quitar la fuga se ve mejor
- el beneficio real del ajuste de hiperparametros.
+ La caida de 0.0265 es lo que venia de reconocer coches ya vistos
+ y no de generalizar a creditos nuevos.
    figura guardada: figuras/fuga_por_vin.png
 
-======================================================================================
- PREDICCIONES CON EL MODELO FINAL REGULARIZADO
-======================================================================================
+================================================================================
+ 9. PREDICCIONES CON EL MODELO FINAL
+================================================================================
 
- Credito mediano, vehiculo de un año
-   principal $  350,000.00 | interes $ 1,500.00 | antiguedad 1 | mes 2
-   --> PREDICCION: NUEVO
-       confianza: NUEVO 97.6%  DEMO 1.6%  FLOTILLA 0.6%
+ principal $350,000.00 | interes $1,500.00 | antiguedad 1 | mes 2
+   PREDICCION: NUEVO
+   confianza: NUEVO 97.6%  DEMO 1.6%  FLOTILLA 0.6%
 
- Credito muy grande, vehiculo del año
-   principal $1,200,000.00 | interes $ 9,000.00 | antiguedad 0 | mes 5
-   --> PREDICCION: DEMO
-       confianza: DEMO 52.0%  NUEVO 36.2%  REFACC 9.3%  FLOTILLA 2.5%
+ principal $1,200,000.00 | interes $9,000.00 | antiguedad 0 | mes 5
+   PREDICCION: DEMO
+   confianza: DEMO 52.0%  NUEVO 36.2%  REFACC 9.3%  FLOTILLA 2.5%
 
- Credito chico, vehiculo con 4 años
-   principal $   90,000.00 | interes $   400.00 | antiguedad 4 | mes 8
-   --> PREDICCION: SEMINUEVOS
-       confianza: SEMINUEVOS 100.0%
+ principal $90,000.00 | interes $400.00 | antiguedad 4 | mes 8
+   PREDICCION: SEMINUEVOS
+   confianza: SEMINUEVOS 100.0%
 
-======================================================================================
- RESUMEN DEL ANALISIS
-======================================================================================
- 1. Particion            : 60% entrenamiento / 20% validacion / 20% prueba, estratificada.
- 2. Modelo base          : sesgo BAJO, varianza ALTA, ajuste OVERFITTING.
- 3. Regularizacion       : max_depth=25, ccp_alpha=0.0002, max_features=5
- 4. Modelo regularizado  : sesgo BAJO, varianza ALTA, ajuste OVERFITTING.
- 5. F1 macro en prueba   : 0.8163  ->  0.8381  (+0.0218)
- 6. Brecha train-val     : 0.2109  ->  0.1300  (-0.0809)
- 7. Variante conservadora: brecha 0.0937 (varianza MEDIA), pero F1 en prueba 0.7973
- 8. Particion honesta por VIN: 0.8045 -> 0.8116 (+0.0071 por regularizar)
-
- Listo.
+================================================================================
+ RESUMEN
+================================================================================
+ Modelo base        : sesgo BAJO, varianza ALTA, ajuste OVERFITTING
+ Modelo regularizado: sesgo BAJO, varianza ALTA, ajuste OVERFITTING
+ F1 macro en prueba : 0.8163 -> 0.8381
+ Brecha train-val   : 0.2109 -> 0.1300
