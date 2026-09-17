@@ -1,149 +1,141 @@
-# Clasificación del tipo de garantía de un crédito automotriz con Random Forest (scikit-learn)
+# Clasificación del tipo de garantía con Random Forest
 
-**Santiago Serrano Montalvo — A01751347**
-Módulo 2 · Portafolio de Implementación · Uso de framework o biblioteca de aprendizaje máquina
-
----
-
-## 1. Introducción y objetivo
-
-Esta entrega resuelve **el mismo problema** que la entrega sin framework —clasificar el tipo de garantía (`collateral`) de un crédito automotriz— pero ahora usando **scikit-learn**. Mantener el problema, el dataset y las cinco variables idénticos permite una comparación directa y justa entre el KNN programado a mano y un modelo configurado con un framework profesional.
-
-El objetivo de la actividad no es sólo obtener un buen resultado, sino **demostrar el dominio del framework**: cómo se parte el dataset, cómo se seleccionan hiperparámetros sin contaminar el conjunto de prueba, cómo se configura el estimador y cómo se evalúa correctamente.
-
-Se ejecuta desde la consola con:
-
-```
-python3 main.py
-```
+**Santiago Serrano Montalvo · A01751347**
+Módulo 2 · Portafolio de Implementación · Uso de framework de aprendizaje máquina
 
 ---
 
-## 2. El algoritmo: Random Forest
+## 1. Resumen
 
-### 2.1 Qué es
+Se implementó Random Forest con scikit-learn para clasificar el tipo de garantía de un crédito automotriz. El objetivo es el mismo de la entrega anterior, pero ahora resuelto con la biblioteca en lugar de programado a mano.
 
-Un Random Forest es un **ensamble de árboles de decisión**. Un solo árbol de decisión es un modelo que va partiendo los datos con preguntas del tipo «¿es `principal` mayor a 420,000?», y en cada hoja asigna la clase mayoritaria de los registros que cayeron ahí.
+Se usó el mismo dataset y las mismas variables que en la implementación desde cero, para poder comparar los dos resultados. Todo está en un solo archivo `main.py`.
 
-El problema de un árbol individual es que tiene **varianza muy alta**: si se cambian unos pocos registros del entrenamiento, el árbol resultante puede ser completamente distinto. Random Forest resuelve esto entrenando muchos árboles y promediando sus votos.
+| Accuracy | F1 macro | Árboles | Datos de prueba |
+|---:|---:|---:|---:|
+| 86.20 % | 0.818 | 300 | 2,644 |
 
-### 2.2 De dónde sale la aleatoriedad
+El modelo llega a 86.20 % de accuracy, casi 5 puntos por encima del KNN, y mejora sobre todo en la clase minoritaria DEMO, que pasa de un F1 de 0.187 a 0.479.
 
-Para que promediar sirva de algo, los árboles tienen que equivocarse en lugares **diferentes**. Random Forest lo consigue con dos fuentes de aleatoriedad:
+## 2. Cómo funciona Random Forest
 
-| Fuente | Qué hace |
-|---|---|
-| **Bagging** (*bootstrap aggregating*) | Cada árbol se entrena sobre una muestra con reemplazo del mismo tamaño que el original. En promedio cada árbol ve ~63 % de los registros distintos. |
-| **Submuestreo de variables** (`max_features`) | En **cada corte**, el árbol sólo puede considerar un subconjunto aleatorio de las variables, no todas. |
+Random Forest es un algoritmo basado en árboles de decisión. Un árbol va separando los datos con preguntas sobre las variables, por ejemplo "¿el monto principal es mayor a 300,000?". Cada respuesta lleva a otra pregunta hasta llegar a una clase.
 
-El submuestreo de variables es lo que verdaderamente **decorrelaciona** los árboles. Sin él, si una variable fuera muy dominante, todos los árboles la elegirían como primer corte y acabarían pareciéndose demasiado; al promediarlos no se ganaría nada.
+El problema de usar un solo árbol es que se aprende demasiado bien los datos de entrenamiento y falla con datos nuevos. Random Forest lo resuelve entrenando muchos árboles a la vez:
 
-### 2.3 Por qué Random Forest para este problema
+1. Cada árbol se entrena con una muestra distinta de los datos, tomada al azar con reemplazo.
+2. En cada corte, el árbol solo puede escoger entre algunas de las columnas, no entre todas.
+3. Para predecir, cada árbol vota por una clase y gana la que tenga más votos.
 
-El KNN de la entrega anterior dejó ver dos problemas concretos del dataset, y Random Forest ataca los dos:
+La idea de fondo es que los errores de un árbol se compensan con los aciertos de los demás. El punto 2 es el que realmente hace que los árboles sean distintos entre sí: si todos pudieran usar todas las columnas en cada corte, terminarían casi idénticos y el bosque no aportaría nada sobre un solo árbol.
 
-1. **NUEVO y FLOTILLA se traslapan.** Los árboles cortan cada variable por separado con umbrales, lo que permite construir fronteras de decisión «en escalones» que una frontera basada en distancia no puede formar. Además, al promediar 300 árboles se obtiene una **probabilidad** por clase, no sólo un voto duro.
+### 2.1 No hace falta normalizar
 
-2. **DEMO y REFACC son clases minúsculas.** El parámetro `class_weight` permite reponderar las clases dentro del criterio de división del árbol, algo que KNN por votación simple no ofrece.
+En la entrega anterior la normalización era necesaria porque KNN mide distancias y `principal`, cuyo valor está en cientos de miles, aplastaba por completo a `tasa`, que vive entre 0 y 0.01.
 
-Como beneficio adicional, **los árboles no necesitan normalización**: cada corte compara una variable contra un umbral, así que la escala de `principal` frente a la de `tasa` es irrelevante. Todo el paso de estandarización z-score que fue indispensable en KNN aquí simplemente no hace falta.
+Random Forest no tiene ese problema. Los árboles no calculan distancias, separan los datos con cortes del tipo "principal > 300000", y un corte funciona igual sin importar la escala de la columna. Por eso aquí no hay ningún paso de normalización.
 
----
+### 2.2 Por qué Random Forest para este problema
 
-## 3. Datos y partición
+El KNN dejó ver dos problemas del dataset y Random Forest ataca los dos. Primero, NUEVO y FLOTILLA se traslapan: los árboles cortan cada variable por umbrales, lo que permite fronteras en escalones que una frontera por distancia no puede formar, y además al promediar 300 árboles se obtiene una probabilidad por clase y no solo un voto duro. Segundo, DEMO y REFACC son clases muy chicas: el parámetro `class_weight` permite reponderarlas dentro del criterio de división, algo que KNN por votación simple no ofrece.
 
-### 3.1 El dataset
+## 3. Dataset
 
-Es el mismo `interest_ledger.csv`: 10,576 registros de pagos mensuales de créditos automotrices, con 5 clases de garantía y las mismas cinco variables derivadas (`principal_amount`, `interest_amount`, `tasa`, `antiguedad`, `mes`).
+El archivo `interest_ledger.csv` tiene 10,576 renglones de intereses de piso. Cada renglón es el interés devengado por un vehículo durante un mes contable.
 
-### 3.2 Partición estratificada
+### 3.1 Variable objetivo
 
-```python
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.25, random_state=42, stratify=y)
-```
+La columna `collateral` indica el tipo de garantía, con cinco clases. La distribución está muy desbalanceada y eso determina la métrica:
 
-| Conjunto | Registros | Porcentaje |
-|---|---:|---:|
-| **Entrenamiento** | 7,932 | 75 % |
-| **Prueba** | 2,644 | 25 % |
+| Clase | Total | Entrenamiento | Prueba | Qué representa |
+|---|---:|---:|---:|---|
+| NUEVO | 4,498 | 3,373 | 1,125 | Vehículo nuevo |
+| FLOTILLA | 3,625 | 2,719 | 906 | Vehículos a nombre de una empresa |
+| SEMINUEVOS | 1,965 | 1,474 | 491 | Vehículo usado |
+| REFACC | 259 | 194 | 65 | Crédito de refaccionamiento |
+| DEMO | 229 | 172 | 57 | Auto nuevo usado como demostración |
 
-El argumento **`stratify=y` es indispensable aquí**. Sin él, las clases pequeñas podrían quedar repartidas de forma muy desigual por puro azar. Con `stratify` cada clase conserva su proporción exacta en ambos conjuntos:
+NUEVO tiene casi 20 veces más casos que DEMO.
 
-| Clase | Total | % | Entrenamiento | Prueba |
-|---|---:|---:|---:|---:|
-| NUEVO | 4,498 | 42.5 % | 3,373 | 1,125 |
-| FLOTILLA | 3,625 | 34.3 % | 2,719 | 906 |
-| SEMINUEVOS | 1,965 | 18.6 % | 1,474 | 491 |
-| REFACC | 259 | 2.4 % | 194 | 65 |
-| DEMO | 229 | 2.2 % | 172 | 57 |
+### 3.2 Variables de entrada
 
-El argumento `random_state=42` fija la semilla para que la partición sea idéntica en cada ejecución.
+Se usaron exactamente las mismas cinco variables de la entrega pasada, para que la comparación sea justa:
 
----
+| Variable | Descripción | Origen |
+|---|---|---|
+| `principal_amount` | Monto del crédito vigente en el mes | Directa |
+| `interest_amount` | Interés devengado durante el mes | Directa |
+| `tasa` | Interés por cada peso prestado | interés / principal |
+| `antiguedad` | Años entre el modelo del vehículo y el mes contable | año contable − año modelo |
+| `mes` | Mes del año, capta estacionalidad | De la fecha |
 
-## 4. La métrica elegida y su justificación
+Igual que antes, la columna `collateral` trae espacios no separables (`\xa0`) pegados a cada valor y la carga los limpia.
 
-**La métrica principal de este trabajo es el F1 macro.** Esta decisión determina qué modelo se selecciona, así que conviene justificarla con precisión.
+### 3.3 Partición
 
-### 4.1 Por qué no el accuracy
+Los datos se dividen con `train_test_split`, con semilla fija (`random_state=42`):
 
-El dataset está muy desbalanceado: NUEVO es el 42.5 % de los registros y DEMO apenas el 2.2 %. Considérese un modelo que **nunca** prediga DEMO:
+| Conjunto | Renglones | Proporción | Uso |
+|---|---:|---:|---|
+| Entrenamiento | 7,932 | 75 % | Ajusta los árboles y elige los parámetros |
+| Prueba | 2,644 | 25 % | Nunca visto durante el ajuste |
 
-- Perdería como máximo 2.2 puntos de accuracy.
-- Su F1 en DEMO sería exactamente **0**.
+**Por qué `stratify=y`.** Esta opción reparte cada clase en la misma proporción en entrenamiento y en prueba. Sin ella, con clases tan chicas como DEMO (229 casos) y REFACC (259) el azar podría dejar casi todos los ejemplos de un solo lado y las métricas de esas clases dejarían de significar algo.
 
-El accuracy no distingue entre un modelo que clasifica bien las cinco clases y uno que abandona por completo las dos pequeñas. Para el negocio eso es inaceptable: identificar correctamente un crédito de refaccionaria o un auto de demostración importa igual que identificar uno nuevo.
+## 4. La métrica elegida
 
-De hecho, la línea base que siempre responde «NUEVO» ya obtiene **42.55 % de accuracy** sin aprender absolutamente nada.
+La métrica principal es el **F1 macro**. Como de esta decisión depende qué modelo se selecciona, vale la pena justificarla.
 
-### 4.2 Por qué F1 macro y no F1 ponderado
+**Por qué no el accuracy.** Con NUEVO en 42.5 % y DEMO en 2.2 %, un modelo que nunca predijera DEMO perdería como máximo 2.2 puntos de accuracy pero tendría F1 de 0 en esa clase. El accuracy no distingue entre un modelo que clasifica bien las cinco clases y uno que abandona las dos chicas. De hecho la referencia que siempre responde NUEVO ya obtiene 42.55 % sin aprender nada.
 
-El **F1 ponderado** pondera el F1 de cada clase por su número de ejemplos, así que reproduce el mismo sesgo hacia las clases mayoritarias que el accuracy.
+**Por qué no el F1 ponderado.** El F1 ponderado pondera cada clase por su número de ejemplos, así que arrastra el mismo sesgo hacia las clases mayoritarias.
 
-El **F1 macro** promedia el F1 de las cinco clases **con el mismo peso**:
+**Por qué F1 macro.** Promedia el F1 de las cinco clases con el mismo peso:
 
 $$
 F_{1,\text{macro}} = \frac{1}{C}\sum_{c=1}^{C} F_{1,c}
 $$
 
-Una clase de 229 registros pesa tanto como una de 4,498. Si el modelo abandona DEMO, el F1 macro cae aproximadamente 0.20 puntos, un castigo que sí se nota.
+Una clase de 229 registros pesa tanto como una de 4,498. Si el modelo abandona DEMO, el F1 macro cae alrededor de 0.20 puntos.
 
-### 4.3 Por qué F1 y no sólo recall
+**Por qué F1 y no solo recall.** El F1 es la media armónica de precisión y recall. Usar solo el recall premiaría a un modelo que predijera DEMO demasiado seguido: encontraría todos los DEMO pero marcaría mal muchos NUEVO. El F1 obliga a equilibrar las dos cosas.
 
-El F1 es la media armónica de precisión y recall:
+Además se reportan el accuracy, el accuracy balanceado y la matriz de confusión completa, que es la que deja ver entre qué clases se confunde el modelo.
 
-$$
-F_1 = \frac{2 \cdot \text{precisión} \cdot \text{recall}}{\text{precisión} + \text{recall}}
-$$
-
-Usar sólo el recall premiaría a un modelo que predijera DEMO con demasiada frecuencia (encontraría todos los DEMO, pero a costa de marcar erróneamente muchos NUEVO). El F1 obliga a equilibrar ambos: sólo sube si el modelo encuentra los casos **y** acierta cuando los marca.
-
-### 4.4 Métricas de apoyo
-
-Se reportan además el **accuracy** (interpretabilidad directa), el **accuracy balanceado** (promedio del recall por clase) y la **matriz de confusión** completa, que es la que permite ver *entre qué clases* se confunde el modelo y no sólo cuánto se equivoca.
-
----
-
-## 5. Selección de hiperparámetros con validación cruzada
-
-### 5.1 El procedimiento
-
-La selección de configuración se hace con **validación cruzada estratificada de 5 particiones sobre el conjunto de entrenamiento**:
+## 5. Configuración del modelo
 
 ```python
-particion = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-marcas = cross_val_score(modelo, X_train, y_train, cv=particion, scoring="f1_macro")
+modelo = RandomForestClassifier(
+    n_estimators=300,        # numero de arboles del bosque
+    max_depth=None,          # hasta donde crece cada arbol
+    min_samples_leaf=1,      # minimo de datos por hoja
+    max_features="sqrt",     # cada corte ve solo algunas columnas
+    class_weight="balanced", # peso de cada clase
+    random_state=42,
+    n_jobs=-1,               # usa todos los nucleos
+)
 ```
 
-`StratifiedKFold` divide el entrenamiento en 5 bloques conservando la proporción de clases en cada uno. El modelo se entrena 5 veces, cada vez usando 4 bloques para entrenar y 1 distinto para validar. El resultado es la media de las 5 evaluaciones, junto con su desviación, que indica qué tan estable es esa configuración.
+| Parámetro | Valor | Para qué sirve |
+|---|---|---|
+| `n_estimators` | 300 | Número de árboles del bosque |
+| `max_depth` | `None` | Deja que los árboles crezcan hasta separar los datos |
+| `min_samples_leaf` | 1 | Mínimo de renglones que deben quedar en cada hoja |
+| `max_features` | `"sqrt"` | En cada corte solo se consideran algunas columnas |
+| `class_weight` | `"balanced"` | Compensa el desbalance entre clases |
+| `random_state` | 42 | Semilla fija para que el resultado sea reproducible |
+| `n_jobs` | -1 | Entrena usando todos los núcleos del procesador |
 
-> **El conjunto de prueba no se toca en ningún momento de este paso.** Si se usara para elegir hiperparámetros, su resultado dejaría de ser una estimación honesta del desempeño con datos nuevos: se estaría sobreajustando al conjunto de prueba.
+El bosque resultante tiene profundidad media de 26.5 y 824 hojas por árbol.
 
-### 5.2 Configuraciones probadas y resultados
+### 5.1 Selección de los parámetros
+
+Para elegir esta configuración se usó validación cruzada estratificada de 5 particiones con `cross_val_score`, sobre el conjunto de entrenamiento. `StratifiedKFold` parte el entrenamiento en 5 bloques conservando la proporción de clases, el modelo se entrena 5 veces usando un bloque distinto como validación en cada vuelta, y se promedia.
+
+El conjunto de prueba no se toca en este paso. Si se usara para elegir parámetros, su resultado dejaría de ser una estimación honesta del desempeño con datos nuevos.
 
 | Árboles | `max_depth` | `min_samples_leaf` | `class_weight` | F1 macro (CV) | Desv. |
-|---:|---:|---:|:---|---:|---:|
+|---:|---:|---:|---|---:|---:|
 | 100 | 3 | 1 | None | 0.6397 | 0.0163 |
 | 100 | 5 | 1 | None | 0.6721 | 0.0112 |
 | 100 | 10 | 1 | None | 0.7338 | 0.0118 |
@@ -155,58 +147,36 @@ marcas = cross_val_score(modelo, X_train, y_train, cv=particion, scoring="f1_mac
 
 ![Comparación de configuraciones](figuras/configuraciones.png)
 
-### 5.3 Lectura de la tabla
+Limitar la profundidad hace daño: con `max_depth=3` el F1 macro es 0.64 y sube a 0.81 al quitar el límite. Con árboles cortos el modelo no tiene capacidad para separar las clases.
 
-**Limitar la profundidad hace daño.** Con `max_depth=3` el F1 macro es 0.64 y sube de forma sostenida hasta 0.81 al quitar el límite. Con árboles cortos el modelo no tiene capacidad suficiente para separar las clases: es **sesgo alto**.
+Forzar hojas grandes también hace daño: pasar `min_samples_leaf` de 1 a 20 baja el F1 de 0.81 a 0.69. Con solo cinco variables, exigir 20 registros por hoja impide aislar las regiones pequeñas donde viven DEMO y REFACC.
 
-**Forzar hojas grandes también hace daño.** Pasar de `min_samples_leaf=1` a 20 baja el F1 de 0.81 a 0.69. Con sólo cinco variables, exigir 20 registros por hoja impide que el árbol aísle las regiones pequeñas donde viven DEMO y REFACC.
+`class_weight="balanced"` es lo que más ayuda, de 0.8089 a 0.8224. Este parámetro multiplica el peso de cada clase por el inverso de su frecuencia dentro del criterio de división, así que equivocarse en un DEMO cuesta unas 19 veces más que equivocarse en un NUEVO.
 
-**`class_weight="balanced"` es lo que más ayuda.** Sube el F1 macro de 0.8089 a 0.8224. Este parámetro multiplica el peso de cada clase por el inverso de su frecuencia dentro del criterio de división, de modo que equivocarse en un DEMO cuesta ~19 veces más que equivocarse en un NUEVO. Exactamente el comportamiento que se buscaba, y la razón por la que se eligió el F1 macro como métrica.
-
-**Las desviaciones son bajas** (0.006 a 0.018), lo que indica que las diferencias entre configuraciones son reales y no ruido de partición.
-
-### 5.4 Configuración final
-
-```python
-RandomForestClassifier(
-    n_estimators=300,        # número de árboles del bosque
-    max_depth=None,          # los árboles crecen hasta separar los datos
-    min_samples_leaf=1,      # mínimo de registros por hoja
-    max_features="sqrt",     # cada corte considera sqrt(5) ≈ 2 variables
-    class_weight="balanced", # compensa el desbalance de clases
-    random_state=42,
-    n_jobs=-1,               # usa todos los núcleos del procesador
-)
-```
-
-Bosque resultante: 300 árboles, profundidad media **26.5** (máxima 36) y **824 hojas** por árbol sobre 7,932 registros de entrenamiento.
-
----
+Las desviaciones son bajas (entre 0.006 y 0.018), lo que indica que las diferencias entre configuraciones son reales y no ruido de partición.
 
 ## 6. Resultados
-
-### 6.1 Métricas globales
 
 | Conjunto | Accuracy | Accuracy balanceado | F1 macro | F1 ponderado |
 |---|---:|---:|---:|---:|
 | Entrenamiento | 98.42 % | 99.21 % | 0.9884 | 0.9842 |
-| **Prueba** | **86.20 %** | **81.41 %** | **0.8180** | **0.8626** |
+| Prueba | 86.20 % | 81.41 % | 0.8180 | 0.8626 |
 
-La brecha entre entrenamiento y prueba en F1 macro es de **0.1703**, señal de sobreajuste. Este punto se analiza a fondo en la entrega de **Análisis y Reporte** (`M2_Analisis`), que es donde corresponde tratarlo.
+La brecha entre entrenamiento y prueba en F1 macro es de 0.1703. Eso es señal de sobreajuste y se analiza a fondo en la entrega de análisis.
 
-### 6.2 Matriz de confusión (conjunto de prueba)
+### 6.1 Matriz de confusión
 
-| Real ↓ / Predicho → | DEMO | FLOTILLA | NUEVO | REFACC | SEMINUEVOS |
+| Real / Predicción | DEMO | FLOTILLA | NUEVO | REFACC | SEMINUEVOS |
 |---|---:|---:|---:|---:|---:|
-| **DEMO** | **28** | 9 | 19 | 0 | 1 |
-| **FLOTILLA** | 6 | **767** | 129 | 0 | 4 |
-| **NUEVO** | 25 | 131 | **962** | 1 | 6 |
-| **REFACC** | 0 | 1 | 3 | **61** | 0 |
-| **SEMINUEVOS** | 1 | 9 | 20 | 0 | **461** |
+| DEMO | 28 | 9 | 19 | 0 | 1 |
+| FLOTILLA | 6 | 767 | 129 | 0 | 4 |
+| NUEVO | 25 | 131 | 962 | 1 | 6 |
+| REFACC | 0 | 1 | 3 | 61 | 0 |
+| SEMINUEVOS | 1 | 9 | 20 | 0 | 461 |
 
 ![Matriz de confusión](figuras/matriz_confusion.png)
 
-### 6.3 Métricas por clase
+### 6.2 Métricas por clase
 
 | Clase | Precisión | Recall | F1 | n |
 |---|---:|---:|---:|---:|
@@ -215,9 +185,9 @@ La brecha entre entrenamiento y prueba en F1 macro es de **0.1703**, señal de s
 | NUEVO | 0.849 | 0.855 | 0.852 | 1,125 |
 | REFACC | 0.984 | 0.938 | 0.961 | 65 |
 | SEMINUEVOS | 0.977 | 0.939 | 0.957 | 491 |
-| **Macro promedio** | **0.823** | **0.814** | **0.818** | 2,644 |
+| **Macro** | **0.823** | **0.814** | **0.818** | 2,644 |
 
-### 6.4 Importancia de cada variable
+### 6.3 Importancia de las variables
 
 ![Importancia de las variables](figuras/importancias.png)
 
@@ -229,25 +199,19 @@ La brecha entre entrenamiento y prueba en F1 macro es de **0.1703**, señal de s
 | `tasa` | 0.1630 |
 | `mes` | 0.0755 |
 
-La importancia se mide como la **reducción media de impureza** que aporta cada variable a lo largo de todos los cortes del bosque. El monto del crédito es la variable dominante, seguida de la antigüedad del vehículo. El mes es la menos informativa, lo cual tiene sentido: el tipo de garantía no depende de la estacionalidad.
+La importancia mide la reducción de impureza que aporta cada variable a lo largo de todos los cortes. El monto del crédito es la variable dominante, seguida de la antigüedad. El mes es la menos informativa, lo cual tiene sentido porque el tipo de garantía no depende de la estacionalidad. Las barras de error muestran la desviación entre los 300 árboles y son estrechas, así que el orden es consistente.
 
-Las barras de error de la gráfica muestran la desviación entre los 300 árboles. Que sean estrechas indica que el orden de importancia es consistente y no un artefacto de unos pocos árboles.
-
----
-
-## 7. Comparación con la implementación sin framework
+## 7. Comparación con la entrega sin framework
 
 ![Comparación de modelos](figuras/comparacion_modelos.png)
 
 | Modelo | Accuracy | F1 macro |
 |---|---:|---:|
-| Línea base (siempre la clase mayoritaria) | 42.55 % | 0.1194 |
+| Referencia (clase mayoritaria) | 42.55 % | 0.1194 |
 | KNN sin framework (k=5) | 81.51 % | 0.7390 |
-| **Random Forest (scikit-learn)** | **86.20 %** | **0.8180** |
+| **Random Forest** | **86.20 %** | **0.8180** |
 
-### 7.1 Dónde está la ganancia
-
-El Random Forest mejora **+4.69 puntos de accuracy** y, más importante, **+0.079 de F1 macro**. La comparación clase por clase muestra de dónde viene esa mejora:
+Por clase:
 
 | Clase | F1 con KNN | F1 con Random Forest | Cambio |
 |---|---:|---:|---:|
@@ -257,106 +221,62 @@ El Random Forest mejora **+4.69 puntos de accuracy** y, más importante, **+0.07
 | REFACC | 0.983 | 0.961 | −0.022 |
 | SEMINUEVOS | 0.950 | 0.957 | +0.007 |
 
-**Casi toda la ganancia viene de DEMO**, que pasa de F1 = 0.187 a 0.479. El recall de esa clase sube de **0.140 a 0.491**: el KNN encontraba 7 de 50 casos y el Random Forest encuentra 28 de 57.
+Casi toda la ganancia viene de DEMO. El recall de esa clase sube de 0.140 a 0.491: el KNN encontraba 7 de 50 casos y el Random Forest encuentra 28 de 57.
 
-La explicación es directa. En KNN la votación por mayoría favorece estructuralmente a las clases numerosas: con 172 ejemplos de DEMO contra 3,373 de NUEVO, es muy improbable que los 5 vecinos más cercanos de un DEMO sean también DEMO. `class_weight="balanced"` ataca exactamente ese mecanismo desde dentro del criterio de división del árbol.
+La explicación es directa. En KNN la votación por mayoría favorece a las clases numerosas: con 172 ejemplos de DEMO contra 3,373 de NUEVO es muy poco probable que los 5 vecinos más cercanos de un DEMO sean también DEMO. `class_weight="balanced"` ataca ese mecanismo desde dentro del criterio de división. REFACC baja un poco porque el reponderado la hace más propensa a falsos negativos, pero la ganancia neta es claramente positiva.
 
-REFACC baja levemente (−0.022) porque el reponderado la hace un poco más propensa a falsos negativos, pero la ganancia neta en F1 macro es claramente positiva.
+Además del resultado, el framework aporta cosas que habría que programar a mano: la partición estratificada con `stratify`, la validación cruzada con `StratifiedKFold`, la reponderación de clases, las probabilidades por clase con `predict_proba` y la paralelización con `n_jobs=-1`.
 
-### 7.2 Qué aporta el framework más allá del resultado
+## 8. Predicciones
 
-| Aspecto | Sin framework | Con framework |
-|---|---|---|
-| Partición estratificada | habría que programarla | `stratify=y` |
-| Validación cruzada | habría que programarla | `StratifiedKFold` + `cross_val_score` |
-| Reponderación de clases | no disponible en KNN simple | `class_weight="balanced"` |
-| Probabilidades por clase | sólo reparto de votos | `predict_proba` |
-| Paralelización | ninguna | `n_jobs=-1` |
-| Tiempo de ejecución | ~7 s (Python puro) | ~25 s incluyendo 8 validaciones cruzadas |
-
----
-
-## 8. Predicciones sobre casos nuevos
-
-El programa clasifica cuatro créditos inventados que no están en el dataset. Además de la clase predicha se muestra `predict_proba`, que es **la proporción de los 300 árboles que votaron por cada clase**, es decir la confianza del ensamble:
+El programa clasifica cuatro créditos que no están en el dataset. Además de la clase se muestra `predict_proba`, que es la proporción de los 300 árboles que votó por cada clase:
 
 ```
  Credito mediano, vehiculo de un año
-   principal $  350,000.00 | interes $ 1,500.00 | tasa 0.00429 | antiguedad 1 | mes 2
-   --> PREDICCION: NUEVO
-       confianza del bosque: NUEVO 85.7%  FLOTILLA 6.7%  DEMO 6.3%  SEMINUEVOS 1.3%
+   principal $350,000.00 | interes $1,500.00 | antiguedad 1 | mes 2
+   PREDICCION: NUEVO
+   confianza: NUEVO 85.7%  FLOTILLA 6.7%  DEMO 6.3%  SEMINUEVOS 1.3%
 
  Credito muy grande, vehiculo del año
-   principal $1,200,000.00 | interes $ 9,000.00 | tasa 0.00750 | antiguedad 0 | mes 5
-   --> PREDICCION: NUEVO
-       confianza del bosque: NUEVO 37.7%  DEMO 29.7%  FLOTILLA 24.7%  REFACC 8.0%
+   principal $1,200,000.00 | interes $9,000.00 | antiguedad 0 | mes 5
+   PREDICCION: NUEVO
+   confianza: NUEVO 37.7%  DEMO 29.7%  FLOTILLA 24.7%  REFACC 8.0%
 
  Credito chico, vehiculo con 4 años
-   principal $   90,000.00 | interes $   400.00 | tasa 0.00444 | antiguedad 4 | mes 8
-   --> PREDICCION: SEMINUEVOS
-       confianza del bosque: SEMINUEVOS 64.0%  REFACC 36.0%
+   principal $90,000.00 | interes $400.00 | antiguedad 4 | mes 8
+   PREDICCION: SEMINUEVOS
+   confianza: SEMINUEVOS 64.0%  REFACC 36.0%
 
  Credito muy chico, vehiculo con 2 años
-   principal $   45,000.00 | interes $   260.00 | tasa 0.00578 | antiguedad 2 | mes 11
-   --> PREDICCION: SEMINUEVOS
-       confianza del bosque: SEMINUEVOS 74.3%  REFACC 25.7%
+   principal $45,000.00 | interes $260.00 | antiguedad 2 | mes 11
+   PREDICCION: SEMINUEVOS
+   confianza: SEMINUEVOS 74.3%  REFACC 25.7%
 ```
 
-**El valor práctico de `predict_proba`.** El primer caso se predice con 85.7 % de confianza y el segundo con apenas 37.7 % frente a un 29.7 % de DEMO. Un sistema en producción puede usar ese número como umbral de decisión: aceptar automáticamente las predicciones por encima de, digamos, 70 % y enviar el resto a revisión manual. Esa información no existía en el KNN, que sólo devolvía un reparto de 5 votos.
+El primer caso se predice con 85.7 % de confianza y el segundo con apenas 37.7 % frente a 29.7 % de DEMO. Ese número sirve como umbral de decisión: se podrían aceptar automáticamente las predicciones arriba de, por ejemplo, 70 % y mandar el resto a revisión. Esa información no existía en el KNN, que solo devolvía un reparto de 5 votos. El segundo caso, un crédito de 1.2 millones sobre un vehículo del año, es genuinamente ambiguo y el modelo lo refleja repartiendo sus votos en tres clases.
 
-Nótese también que el segundo caso —un crédito de 1.2 millones sobre un vehículo del año— es genuinamente ambiguo, y el modelo lo refleja repartiendo sus votos en tres clases en lugar de dar una respuesta falsamente segura.
+## 9. Análisis
+
+SEMINUEVOS y REFACC siguen siendo las clases con mejores resultados, igual que con KNN, porque ocupan regiones bien delimitadas: REFACC por sus montos bajos y SEMINUEVOS por la antigüedad del vehículo. La precisión de REFACC es 0.984, así que de 62 créditos marcados como refaccionaria 61 lo eran.
+
+DEMO mejora bastante respecto al KNN aunque sigue siendo la clase más débil, con F1 de 0.479.
+
+La confusión entre NUEVO y FLOTILLA no se resuelve: 131 NUEVO predichos como FLOTILLA y 129 FLOTILLA predichos como NUEVO, en total 260 errores que son el 71 % de todos los errores. Esto no es un defecto del algoritmo. Un crédito de flotilla es financieramente un crédito de auto nuevo y lo que los distingue es el tipo de acreditado, que no está en ninguna de las cinco variables. Que dos algoritmos con mecanismos completamente distintos fallen en el mismo lugar y en proporciones parecidas confirma que el límite está en los datos.
+
+Sobre el sobreajuste: el modelo llega a 98.42 % en entrenamiento contra 86.20 % en prueba. Con 824 hojas por árbol y 7,932 registros, cada hoja tiene en promedio menos de 10 registros, así que el bosque está memorizando parte del entrenamiento. El diagnóstico completo de sesgo, varianza y las técnicas de regularización para corregirlo son el contenido de la entrega de análisis, donde ajustando `max_features`, `max_depth` y `ccp_alpha` la brecha baja de 0.21 a 0.13 y el F1 macro en prueba sube a 0.838.
+
+## 10. Conclusión
+
+El framework está aplicado correctamente: partición estratificada, selección de hiperparámetros con validación cruzada sin tocar el conjunto de prueba, configuración explícita del estimador y evaluación con matriz de confusión y reporte por clase.
+
+El modelo alcanza 86.20 % de accuracy y 0.8180 de F1 macro sobre 2,644 registros de prueba, contra 42.55 % y 0.1194 de la referencia, y clasifica créditos nuevos desde la consola con su nivel de confianza.
+
+La métrica está elegida y justificada: el F1 macro, porque el dataset está desbalanceado 19 a 1 y el objetivo es clasificar bien las cinco garantías, no solo las frecuentes.
+
+Random Forest supera al KNN en 4.69 puntos de accuracy y 0.079 de F1 macro, con la mejora concentrada casi por completo en DEMO gracias a `class_weight="balanced"`.
+
+El límite que queda es de los datos y no del algoritmo. Agregar el tipo de acreditado al dataset sería la mejora individual de mayor impacto. También se podría probar Gradient Boosting, que suele superar a Random Forest en datos tabulares.
 
 ---
 
-## 9. Análisis del desempeño
-
-### 9.1 Lo que funciona
-
-**SEMINUEVOS (F1 = 0.957) y REFACC (F1 = 0.961)** siguen siendo las clases mejor clasificadas, igual que con KNN. Ambas ocupan regiones bien delimitadas: REFACC por sus montos muy bajos y SEMINUEVOS por la antigüedad del vehículo. La precisión de REFACC es **0.984**: de 62 créditos marcados como refaccionaria, 61 lo eran.
-
-**DEMO mejora radicalmente** respecto al KNN, aunque sigue siendo la clase más débil (F1 = 0.479). El recall pasa de 0.140 a 0.491.
-
-### 9.2 Lo que sigue fallando
-
-**La confusión NUEVO ↔ FLOTILLA persiste**: 131 NUEVO predichos como FLOTILLA y 129 FLOTILLA predichos como NUEVO, un total de 260 errores que representan el **71 % de todos los errores del modelo**.
-
-Esta confusión **no es un defecto del algoritmo**. Un crédito de flotilla es, financieramente, un crédito de auto nuevo: mismo tipo de vehículo, montos similares, antigüedad cero. Lo que los distingue es **quién es el acreditado** —una empresa en lugar de una persona—, y esa información no está en ninguna de las cinco variables. El hecho de que dos algoritmos con mecanismos completamente diferentes (distancia euclidiana y particiones recursivas) fallen en el mismo lugar y en proporciones parecidas confirma que el límite está en los datos, no en el modelo.
-
-**DEMO sigue por debajo de 0.5 de F1.** Los 29 errores de DEMO se reparten entre NUEVO (19) y FLOTILLA (9), que son precisamente las clases con las que comparte perfil financiero. Un auto de demostración es un auto nuevo que el concesionario usó unos meses; sus cifras son casi indistinguibles.
-
-### 9.3 Sobre el sobreajuste
-
-El modelo alcanza 98.42 % en entrenamiento contra 86.20 % en prueba. Con 824 hojas por árbol y 7,932 registros, cada hoja contiene en promedio menos de 10 registros: el bosque está memorizando parte del entrenamiento.
-
-Esto está **deliberadamente fuera del alcance de este reporte**, que trata sobre el uso correcto del framework. El diagnóstico completo de sesgo, varianza y nivel de ajuste, junto con las técnicas de regularización aplicadas para corregirlo, es el contenido de la entrega `M2_Analisis`. Allí se muestra que ajustando `max_features`, `max_depth` y `ccp_alpha` la brecha baja de 0.21 a 0.13 y el F1 macro en prueba sube a 0.838.
-
----
-
-## 10. Conclusiones
-
-1. **El framework está aplicado correctamente.** Se usa `train_test_split` con estratificación, `StratifiedKFold` con `cross_val_score` para seleccionar hiperparámetros sin tocar el conjunto de prueba, configuración explícita y justificada del estimador, y evaluación con `confusion_matrix` y `classification_report`.
-
-2. **El modelo aprende y hace predicciones.** Alcanza **86.20 % de accuracy** y **0.8180 de F1 macro** sobre 2,644 registros de prueba, frente al 42.55 % y 0.1194 de la línea base. Clasifica créditos nuevos desde la consola con su nivel de confianza.
-
-3. **La métrica está elegida y justificada con precisión.** El **F1 macro** se selecciona porque el dataset está desbalanceado 19 a 1 y porque el objetivo del negocio es clasificar bien las cinco garantías, no sólo las frecuentes. Se descartan explícitamente el accuracy y el F1 ponderado por reproducir el sesgo hacia las clases mayoritarias.
-
-4. **Random Forest supera claramente al KNN sin framework**: +4.69 puntos de accuracy y +0.079 de F1 macro. La mejora se concentra casi por completo en DEMO (F1 de 0.187 a 0.479) y proviene de `class_weight="balanced"`, un mecanismo que la votación por mayoría de KNN no tiene.
-
-5. **El límite que queda es de los datos, no del algoritmo.** La confusión NUEVO ↔ FLOTILLA concentra el 71 % de los errores y afecta por igual a los dos algoritmos probados, porque la variable que las distingue —el tipo de acreditado— no está en el dataset.
-
-### Trabajo siguiente
-
-- **Análisis de sesgo, varianza y regularización**: entrega `M2_Analisis`.
-- **Incorporar el tipo de acreditado** al dataset sería la mejora individual de mayor impacto.
-- Probar **Gradient Boosting** (`HistGradientBoostingClassifier`), que suele superar a Random Forest en datos tabulares.
-
----
-
-## Anexo: cómo reproducir estos resultados
-
-```
-cd M2_ConFramework
-python3 main.py
-```
-
-Requisitos: `pandas`, `numpy`, `scikit-learn` y `matplotlib`. Las figuras se generan en `figuras/` y la salida completa de consola está guardada en `salida.txt`.
+Para reproducir los resultados: `cd M2_ConFramework && python3 main.py`. Requiere pandas, numpy, scikit-learn y matplotlib. Las figuras quedan en `figuras/` y la salida completa en `salida.txt`.

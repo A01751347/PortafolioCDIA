@@ -1,72 +1,58 @@
-======================================================================================
- DATOS
-======================================================================================
- Archivo          : interest_ledger.csv
- Variables        : principal_amount, interest_amount, tasa, antiguedad, mes
- Registros totales: 10576
- Entrenamiento    : 7932  (75%)
- Prueba           : 2644  (25%)
+Total de datos: 10576
+Entrenamiento: 7932
+Prueba: 2644
 
- Registros por clase (el dataset esta muy desbalanceado):
-   DEMO         total   229 (  2.2%)   train   172   test    57
-   FLOTILLA     total  3625 ( 34.3%)   train  2719   test   906
-   NUEVO        total  4498 ( 42.5%)   train  3373   test  1125
-   REFACC       total   259 (  2.4%)   train   194   test    65
-   SEMINUEVOS   total  1965 ( 18.6%)   train  1474   test   491
+Datos por clase:
+   DEMO         train   172   test    57   (2.2% del total)
+   FLOTILLA     train  2719   test   906   (34.3% del total)
+   NUEVO        train  3373   test  1125   (42.5% del total)
+   REFACC       train   194   test    65   (2.4% del total)
+   SEMINUEVOS   train  1474   test   491   (18.6% del total)
 
-======================================================================================
- LINEA BASE - clasificador que siempre predice la clase mayoritaria
-======================================================================================
-   Accuracy : 42.55%
-   F1 macro : 0.1194
-   Cualquier modelo util tiene que superar claramente estos numeros.
+================================================================================
+ LINEA BASE: siempre la clase mayoritaria
+================================================================================
+   Accuracy: 42.55 % | F1 macro: 0.1194
 
-======================================================================================
- SELECCION DE HIPERPARAMETROS - validacion cruzada estratificada de 5 particiones
- (solo sobre el conjunto de entrenamiento; el de prueba no se toca)
-======================================================================================
- arboles  max_depth   min_leaf      pesos      F1 macro (CV)       desv
-     100          3          1       None             0.6397     0.0163
-     100          5          1       None             0.6721     0.0112
-     100         10          1       None             0.7338     0.0118
-     100       None          1       None             0.8149     0.0132
-     300       None          1       None             0.8089     0.0182
-     300       None          5       None             0.7269     0.0061
-     300       None         20       None             0.6946     0.0072
-     300       None          1   balanced             0.8224     0.0135
+================================================================================
+ VALIDACION CRUZADA (5 partes) SOBRE ENTRENAMIENTO
+================================================================================
+  arboles  max_depth   min_leaf       pesos       F1 macro      desv
+      100          3          1        None         0.6397    0.0163
+      100          5          1        None         0.6721    0.0112
+      100         10          1        None         0.7338    0.0118
+      100       None          1        None         0.8149    0.0132
+      300       None          1        None         0.8089    0.0182
+      300       None          5        None         0.7269    0.0061
+      300       None         20        None         0.6946    0.0072
+      300       None          1    balanced         0.8224    0.0135
 
- Mejor configuracion por F1 macro en validacion cruzada:
-   {'n_estimators': 300, 'max_depth': None, 'min_samples_leaf': 1, 'class_weight': 'balanced'}
+ Mejor configuracion: {'n_estimators': 300, 'max_depth': None, 'min_samples_leaf': 1, 'class_weight': 'balanced'}
 
-======================================================================================
- ENTRENAMIENTO DEL MODELO FINAL
-======================================================================================
+================================================================================
+ MODELO FINAL
+================================================================================
  Configuracion: {'n_estimators': 300, 'max_depth': None, 'min_samples_leaf': 1, 'class_weight': 'balanced'}
- Bosque entrenado con 300 arboles.
- Profundidad media de los arboles: 26.5  (max 36)
- Hojas por arbol (promedio)      : 824
+ Profundidad media de los arboles: 26.5
+ Hojas por arbol: 824
 
-======================================================================================
- EVALUACION
-======================================================================================
+--------------------------------------------------------------------------------
+ ENTRENAMIENTO  (n = 7932)
+--------------------------------------------------------------------------------
+   Accuracy           : 98.42 %
+   Accuracy balanceado: 99.21 %
+   F1 macro           : 0.9884
+   F1 ponderado       : 0.9842
 
---------------------------------------------------------------------------------------
- CONJUNTO DE ENTRENAMIENTO  (n = 7932)
---------------------------------------------------------------------------------------
-   Accuracy          : 98.42%
-   Accuracy balanceado: 99.21%   (promedio del recall de cada clase)
-   F1 macro          : 0.9884   <-- metrica de seleccion
-   F1 ponderado      : 0.9842
+--------------------------------------------------------------------------------
+ PRUEBA  (n = 2644)
+--------------------------------------------------------------------------------
+   Accuracy           : 86.2 %
+   Accuracy balanceado: 81.41 %
+   F1 macro           : 0.818
+   F1 ponderado       : 0.8626
 
---------------------------------------------------------------------------------------
- CONJUNTO DE PRUEBA  (n = 2644)
---------------------------------------------------------------------------------------
-   Accuracy          : 86.20%
-   Accuracy balanceado: 81.41%   (promedio del recall de cada clase)
-   F1 macro          : 0.8180   <-- metrica de seleccion
-   F1 ponderado      : 0.8626
-
-   Matriz de confusion (filas = real, columnas = prediccion):
+   Matriz de confusion:
                         DEMO   FLOTILLA      NUEVO     REFACC SEMINUEVOS
      DEMO                 28          9         19          0          1
      FLOTILLA              6        767        129          0          4
@@ -90,51 +76,49 @@ weighted avg      0.864     0.862     0.863      2644
  Brecha entrenamiento - prueba en F1 macro: 0.1703
  (esta brecha se analiza a fondo en la entrega M2_Analisis)
 
- Importancia de cada variable:
+Importancia de cada variable:
    principal_amount     0.3554
    antiguedad           0.2072
    interest_amount      0.1989
    tasa                 0.1630
    mes                  0.0755
 
-======================================================================================
- PREDICCIONES SOBRE CASOS NUEVOS (no estan en el dataset)
-======================================================================================
+================================================================================
+ PREDICCIONES DE CASOS NUEVOS
+================================================================================
 
  Credito mediano, vehiculo de un año
-   principal $  350,000.00 | interes $ 1,500.00 | tasa 0.00429 | antiguedad 1 | mes 2
-   --> PREDICCION: NUEVO
-       confianza del bosque: NUEVO 85.7%  FLOTILLA 6.7%  DEMO 6.3%  SEMINUEVOS 1.3%
+   principal $350,000.00 | interes $1,500.00 | antiguedad 1 | mes 2
+   PREDICCION: NUEVO
+   confianza: NUEVO 85.7%  FLOTILLA 6.7%  DEMO 6.3%  SEMINUEVOS 1.3%
 
  Credito muy grande, vehiculo del año
-   principal $1,200,000.00 | interes $ 9,000.00 | tasa 0.00750 | antiguedad 0 | mes 5
-   --> PREDICCION: NUEVO
-       confianza del bosque: NUEVO 37.7%  DEMO 29.7%  FLOTILLA 24.7%  REFACC 8.0%
+   principal $1,200,000.00 | interes $9,000.00 | antiguedad 0 | mes 5
+   PREDICCION: NUEVO
+   confianza: NUEVO 37.7%  DEMO 29.7%  FLOTILLA 24.7%  REFACC 8.0%
 
  Credito chico, vehiculo con 4 años
-   principal $   90,000.00 | interes $   400.00 | tasa 0.00444 | antiguedad 4 | mes 8
-   --> PREDICCION: SEMINUEVOS
-       confianza del bosque: SEMINUEVOS 64.0%  REFACC 36.0%
+   principal $90,000.00 | interes $400.00 | antiguedad 4 | mes 8
+   PREDICCION: SEMINUEVOS
+   confianza: SEMINUEVOS 64.0%  REFACC 36.0%
 
  Credito muy chico, vehiculo con 2 años
-   principal $   45,000.00 | interes $   260.00 | tasa 0.00578 | antiguedad 2 | mes 11
-   --> PREDICCION: SEMINUEVOS
-       confianza del bosque: SEMINUEVOS 74.3%  REFACC 25.7%
+   principal $45,000.00 | interes $260.00 | antiguedad 2 | mes 11
+   PREDICCION: SEMINUEVOS
+   confianza: SEMINUEVOS 74.3%  REFACC 25.7%
 
-======================================================================================
+================================================================================
  GRAFICAS
-======================================================================================
+================================================================================
    figura guardada: figuras/matriz_confusion.png
    figura guardada: figuras/importancias.png
    figura guardada: figuras/configuraciones.png
    figura guardada: figuras/comparacion_modelos.png
 
-======================================================================================
+================================================================================
  RESUMEN
-======================================================================================
- modelo                           accuracy     F1 macro
- Linea base (mayoritaria)           42.55%       0.1194
- KNN sin framework (k=5)            81.51%       0.7390
- Random Forest (sklearn)            86.20%       0.8180
-
- Listo.
+================================================================================
+ modelo                       accuracy   F1 macro
+ Linea base                     42.55%     0.1194
+ KNN sin framework              81.51%     0.7390
+ Random Forest                  86.20%     0.8180
