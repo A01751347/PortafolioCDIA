@@ -1,0 +1,14 @@
+Santiago Serrano Montalvo A01751347
+
+Entrega: Implementacion de un modelo de deep learning
+
+Le solicite ayuda a Claude para:
+
+- Entender la arquitectura de una CNN y por que Global Average Pooling reduce
+  tantos parametros frente a aplanar hacia una capa densa.
+- Sintaxis de PyTorch: Dataset, DataLoader, el ciclo de entrenamiento y como
+  usar la GPU de Apple (MPS).
+- Implementar el aumento de datos con affine_grid / grid_sample.
+- Revisar que la particion por pista (track) estuviera bien hecha para no
+  meter fotos casi identicas en entrenamiento y validacion.
+- Dar formato al reporte en PDF (mi original es el .md).
