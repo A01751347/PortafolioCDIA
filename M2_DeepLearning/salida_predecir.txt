@@ -1,0 +1,99 @@
+========================================================================
+ CLASIFICADOR DE SEÑALES DE TRANSITO
+========================================================================
+ CNN entrenada sobre GTSRB (43 clases) | mps
+ Accuracy en el conjunto de prueba: 99.11 %
+
+ ----------------------------------------------------------------------
+ Imagen 1
+   clase real : 11  Prioridad en cruce
+   PREDICCION : 11  Prioridad en cruce   CORRECTO
+   las 3 mas probables:
+     1. Prioridad en cruce           100.00%  #######################################
+     2. Hielo o nieve                  0.00%  
+     3. Fin prohibido rebasar camion   0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 2
+   clase real : 23  Pavimento resbaloso
+   PREDICCION : 23  Pavimento resbaloso   CORRECTO
+   las 3 mas probables:
+     1. Pavimento resbaloso          100.00%  #######################################
+     2. Curva peligrosa izquierda      0.00%  
+     3. Cruce de ciclistas             0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 3
+   clase real : 12  Via preferente
+   PREDICCION : 12  Via preferente   CORRECTO
+   las 3 mas probables:
+     1. Via preferente               100.00%  #######################################
+     2. Ceda el paso                   0.00%  
+     3. Circule por la derecha         0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 4
+   clase real : 12  Via preferente
+   PREDICCION : 12  Via preferente   CORRECTO
+   las 3 mas probables:
+     1. Via preferente               100.00%  #######################################
+     2. Obras en la via                0.00%  
+     3. Circule por la derecha         0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 5
+   clase real : 23  Pavimento resbaloso
+   PREDICCION : 23  Pavimento resbaloso   CORRECTO
+   las 3 mas probables:
+     1. Pavimento resbaloso           99.23%  #######################################
+     2. Curva peligrosa derecha        0.68%  
+     3. Curva peligrosa izquierda      0.03%  
+
+ ----------------------------------------------------------------------
+ Imagen 6
+   clase real :  2  Limite 50 km/h
+   PREDICCION :  2  Limite 50 km/h   CORRECTO
+   las 3 mas probables:
+     1. Limite 50 km/h               100.00%  ########################################
+     2. Curvas sucesivas               0.00%  
+     3. Limite 80 km/h                 0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 7
+   clase real : 27  Peatones
+   PREDICCION : 27  Peatones   CORRECTO
+   las 3 mas probables:
+     1. Peatones                     100.00%  #######################################
+     2. Prioridad en cruce             0.00%  
+     3. Precaucion general             0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 8
+   clase real : 41  Fin prohibido rebasar
+   PREDICCION : 41  Fin prohibido rebasar   CORRECTO
+   las 3 mas probables:
+     1. Fin prohibido rebasar        100.00%  #######################################
+     2. Fin prohibido rebasar camion   0.00%  
+     3. Curva peligrosa izquierda      0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 9
+   clase real : 35  Siga de frente
+   PREDICCION : 35  Siga de frente   CORRECTO
+   las 3 mas probables:
+     1. Siga de frente               100.00%  #######################################
+     2. Semaforo                       0.00%  
+     3. Siga de frente o izquierda     0.00%  
+
+ ----------------------------------------------------------------------
+ Imagen 10
+   clase real :  2  Limite 50 km/h
+   PREDICCION :  2  Limite 50 km/h   CORRECTO
+   las 3 mas probables:
+     1. Limite 50 km/h               100.00%  ########################################
+     2. Curvas sucesivas               0.00%  
+     3. Glorieta obligatoria           0.00%  
+
+ ======================================================================
+ Acertadas 10 de 10
+   figura guardada: figuras/predicciones.png
