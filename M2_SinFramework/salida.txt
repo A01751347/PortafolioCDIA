@@ -1,53 +1,31 @@
-==============================================================================
- PRUEBAS DE CORRECTITUD DE LA IMPLEMENTACION
-==============================================================================
- [OK] distancia_euclidiana([0,0],[3,4]) = 5.0  (esperado 5.0)
- [OK] media = 5.0 y desviacion = 2.0  (esperado 5.0 y 2.0)
- [OK] votar(['A','B','B','A','B']) = 'B'  (esperado 'B')
- [OK] votar(['A','B','B','A']) = 'A'  (empate, gana el mas cercano)
- [OK] KNN de juguete: 0.9 -> ROJO y 11.2 -> AZUL  (grupos separados)
- [OK] k=1 reproduce el 100% del entrenamiento  (memorizacion)
- [OK] matriz de confusion = [[2,1],[0,2]] y F1(A) = 0.800  (esperado 0.800)
+Total de datos: 10576
+Entrenamiento: 7932
+Prueba: 2644
 
- Las 7 pruebas pasaron: el algoritmo esta implementado correctamente.
+Registros por clase:
+   DEMO         train   179   test    50
+   FLOTILLA     train  2771   test   854
+   NUEVO        train  3319   test  1179
+   REFACC       train   200   test    59
+   SEMINUEVOS   train  1463   test   502
 
-==============================================================================
- DATOS
-==============================================================================
- Archivo: interest_ledger.csv
- Variables usadas: principal, interes, tasa, antiguedad, mes
- Registros totales : 10576
- Entrenamiento     : 7932  (75%)
- Prueba            : 2644  (25%)
-
- Registros por clase:
-   DEMO         total   229   train   179   test    50
-   FLOTILLA     total  3625   train  2771   test   854
-   NUEVO        total  4498   train  3319   test  1179
-   REFACC       total   259   train   200   test    59
-   SEMINUEVOS   total  1965   train  1463   test   502
-
- Normalizacion z-score ajustada SOLO con entrenamiento:
+Media y desviacion (calculadas solo con entrenamiento):
    principal    media   372,502.2969   desviacion   157,576.4330
    interes      media     1,898.3602   desviacion     1,887.8217
    tasa         media         0.0049   desviacion         0.0037
    antiguedad   media         0.7959   desviacion         1.4276
    mes          media         5.6130   desviacion         3.5193
 
-==============================================================================
- CALCULO DE VECINOS
-==============================================================================
- Midiendo la distancia de cada uno de los 2644 puntos de prueba
- contra los 7932 puntos de entrenamiento...
-   ... 500/2644 puntos de prueba procesados
-   ... 1000/2644 puntos de prueba procesados
-   ... 1500/2644 puntos de prueba procesados
-   ... 2000/2644 puntos de prueba procesados
-   ... 2500/2644 puntos de prueba procesados
+Calculando distancias...
+   ... 500 de 2644
+   ... 1000 de 2644
+   ... 1500 de 2644
+   ... 2000 de 2644
+   ... 2500 de 2644
 
-==============================================================================
+======================================================================
  COMPARACION DE VALORES DE k
-==============================================================================
+======================================================================
     k     accuracy     F1 macro
     1       84.23%        0.785
     3       82.75%        0.753
@@ -58,12 +36,13 @@
    15       79.84%        0.714
    21       79.01%        0.693
 
-==============================================================================
- RESULTADOS DEL MODELO FINAL (k = 5)
-==============================================================================
- Accuracy : 81.51%
+======================================================================
+ RESULTADOS CON k = 5
+======================================================================
 
- Matriz de confusion (filas = clase real, columnas = prediccion):
+Accuracy: 81.51 %
+
+Matriz de confusion (filas = real, columnas = prediccion):
                       DEMO   FLOTILLA      NUEVO     REFACC SEMINUEVOS
    DEMO                  7         18         25          0          0
    FLOTILLA              6        692        151          0          5
@@ -71,43 +50,38 @@
    REFACC                0          0          2         57          0
    SEMINUEVOS            1         19         16          0        466
 
- Metricas por clase:
+Metricas por clase:
    DEMO         precision 0.280   recall 0.140   F1 0.187   (n=50)
    FLOTILLA     precision 0.724   recall 0.810   F1 0.765   (n=854)
    NUEVO        precision 0.828   recall 0.791   F1 0.809   (n=1179)
    REFACC       precision 1.000   recall 0.966   F1 0.983   (n=59)
    SEMINUEVOS   precision 0.973   recall 0.928   F1 0.950   (n=502)
 
- F1 macro : 0.739
+F1 macro: 0.739
 
-==============================================================================
- PREDICCIONES SOBRE CASOS NUEVOS (datos que no estan en el dataset)
-==============================================================================
+======================================================================
+ PREDICCIONES DE CASOS NUEVOS
+======================================================================
 
  Credito grande, auto del año
-   principal $  350,000.00 | interes $ 1,500.00 | tasa 0.00429
-   antiguedad 1 años | mes 2
-   --> PREDICCION: NUEVO
-       votos de los 5 vecinos: DEMO 2/5, NUEVO 3/5
+   principal $350,000.00 | interes $1,500.00 | antiguedad 1 | mes 2
+   PREDICCION: NUEVO
+   votos: DEMO 2/5, NUEVO 3/5
 
  Credito muy grande, auto nuevo
-   principal $1,200,000.00 | interes $ 9,000.00 | tasa 0.00750
-   antiguedad 0 años | mes 5
-   --> PREDICCION: DEMO
-       votos de los 5 vecinos: DEMO 3/5, NUEVO 2/5
+   principal $1,200,000.00 | interes $9,000.00 | antiguedad 0 | mes 5
+   PREDICCION: DEMO
+   votos: DEMO 3/5, NUEVO 2/5
 
  Credito chico, auto con 4 años
-   principal $   90,000.00 | interes $   400.00 | tasa 0.00444
-   antiguedad 4 años | mes 8
-   --> PREDICCION: SEMINUEVOS
-       votos de los 5 vecinos: SEMINUEVOS 5/5
+   principal $90,000.00 | interes $400.00 | antiguedad 4 | mes 8
+   PREDICCION: SEMINUEVOS
+   votos: SEMINUEVOS 5/5
 
-==============================================================================
+======================================================================
  GRAFICAS
-==============================================================================
+======================================================================
    figura guardada: figuras/distribucion_clases.png
    figura guardada: figuras/matriz_confusion.png
    figura guardada: figuras/metricas_por_clase.png
    figura guardada: figuras/barrido_k.png
-
- Listo.
