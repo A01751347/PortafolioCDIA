@@ -1,0 +1,214 @@
+
+======================================================================================
+ 1. DATOS
+======================================================================================
+ Dataset      : GTSRB - señales de transito alemanas (fotografias reales)
+ Dispositivo  : mps
+ Clases       : 43
+ Resolucion   : 32 x 32 pixeles en color
+
+ conjunto                             imagenes
+ Entrenamiento                           31380
+ Validacion (pistas separadas)            7829
+ Prueba (conjunto oficial GTSRB)         12630
+
+ Normalizacion por canal, calculada solo con entrenamiento:
+   media      R 0.3190  G 0.2871  B 0.3061
+   desviacion R 0.2596  G 0.2415  B 0.2528
+
+ Clases con menos ejemplos: Limite 20 km/h (180) Siga de frente o i (180) Fin de restriccion (180) Peatones (180) 
+ Clases con mas ejemplos  : Limite 50 km/h (1800) Limite 30 km/h (1770) Ceda el paso (1740) 
+   figura guardada: figuras/muestra_dataset.png
+   figura guardada: figuras/aumento_datos.png
+
+======================================================================================
+ 2. MODELO A - APROXIMACION INICIAL
+======================================================================================
+ Arquitectura : CNN de 4 convoluciones + 2 capas densas
+ Parametros   : 2,185,291
+ Optimizador  : Adam, tasa fija 1e-3
+ Regularizacion: NINGUNA (sin BatchNorm, sin Dropout, sin weight decay)
+ Aumento de datos: NO
+
+ epoca     perdida tr      acc tr  perdida val     acc val       tasa      seg
+ ----------------------------------------------------------------------------------
+ 1             1.0912      68.39%       0.3397      92.49%    0.00100      6.0  *mejor
+ 2             0.0820      97.93%       0.2534      94.11%    0.00100      5.6  *mejor
+ 3             0.0296      99.21%       0.2444      95.48%    0.00100      5.5  *mejor
+ 4             0.0183      99.52%       0.2554      95.13%    0.00100      5.5
+ 5             0.0165      99.50%       0.2431      95.43%    0.00100      5.6
+ 6             0.0098      99.72%       0.4271      93.13%    0.00100      5.6
+ 7             0.0125      99.65%       0.2162      96.85%    0.00100      5.6  *mejor
+ 8             0.0037      99.89%       0.2336      96.31%    0.00100      5.6
+ 9             0.0098      99.69%       0.1903      96.60%    0.00100      5.6
+ 10            0.0147      99.54%       0.2103      97.37%    0.00100      5.6  *mejor
+ 11            0.0070      99.84%       0.1800      97.30%    0.00100      5.5
+ 12            0.0042      99.87%       0.2253      96.91%    0.00100      5.6
+ 13            0.0134      99.61%       0.1596      97.23%    0.00100      5.6
+ 14            0.0053      99.88%       0.1555      97.61%    0.00100      5.9  *mejor
+ 15            0.0005      99.99%       0.1696      97.73%    0.00100      5.7  *mejor
+ 16            0.0000     100.00%       0.1843      97.84%    0.00100      5.5  *mejor
+ 17            0.0000     100.00%       0.1880      97.84%    0.00100      5.7
+ 18            0.0000     100.00%       0.1924      97.84%    0.00100      5.6
+ 19            0.0000     100.00%       0.1960      97.83%    0.00100      5.5
+ 20            0.0000     100.00%       0.1999      97.84%    0.00100      5.5
+ 21            0.0000     100.00%       0.2037      97.80%    0.00100      5.5
+ 22            0.0000     100.00%       0.2077      97.80%    0.00100      5.5
+ 23            0.0000     100.00%       0.2115      97.80%    0.00100      5.7
+ 24            0.0000     100.00%       0.2152      97.79%    0.00100      5.6
+ 25            0.0000     100.00%       0.2189      97.80%    0.00100      5.6
+ 26            0.0000     100.00%       0.2223      97.82%    0.00100      5.6
+ 27            0.0000     100.00%       0.2259      97.82%    0.00100      5.7
+ 28            0.0000     100.00%       0.2289      97.82%    0.00100      5.8
+ 29            0.0000     100.00%       0.2323      97.82%    0.00100      5.7
+ 30            0.0000     100.00%       0.2358      97.82%    0.00100      6.0
+
+ Evaluacion del MODELO A:
+   entrenamiento                      accuracy  100.00%   F1 macro 1.0000
+   validacion                         accuracy   97.82%   F1 macro 0.9660
+   prueba                             accuracy   97.31%   F1 macro 0.9602
+
+   Brecha entrenamiento - validacion: 2.18 puntos porcentuales
+   El modelo llega a 100.00% en lo que ya vio y baja a 97.82% en datos
+   nuevos: esta MEMORIZANDO. Ese es el problema que ataca el MODELO B.
+
+======================================================================================
+ 3. MODELO B - VERSION MEJORADA
+======================================================================================
+ Cambios respecto al MODELO A:
+   1. BatchNorm despues de cada convolucion
+   2. Dropout creciente (0.2 / 0.3 / 0.4 / 0.5)
+   3. Un tercer bloque convolucional (32 -> 64 -> 128 canales)
+   4. Global Average Pooling en vez de aplanar hacia una densa de 512
+   5. Aumento de datos: rotacion, traslacion, escala, brillo y contraste
+   6. Weight decay 1e-4 (penalizacion L2 sobre los pesos)
+   7. Tasa de aprendizaje con decaimiento coseno
+   8. Early stopping con paciencia de 8 epocas
+
+ Parametros   : 309,771  (7.1x menos que el MODELO A)
+
+ epoca     perdida tr      acc tr  perdida val     acc val       tasa      seg
+ ----------------------------------------------------------------------------------
+ 1             2.1240      38.94%       0.9586      68.43%    0.00200      9.8  *mejor
+ 2             0.5556      83.61%       0.1817      94.94%    0.00199     19.0  *mejor
+ 3             0.2225      93.85%       0.1434      95.10%    0.00198     24.3  *mejor
+ 4             0.1325      96.35%       0.0355      99.05%    0.00195     22.4  *mejor
+ 5             0.0962      97.35%       0.0514      98.39%    0.00191     24.1
+ 6             0.0813      97.71%       0.0262      99.22%    0.00187     22.9  *mejor
+ 7             0.0670      98.20%       0.0338      99.14%    0.00181     12.2
+ 8             0.0597      98.34%       0.0146      99.60%    0.00174      8.7  *mejor
+ 9             0.0529      98.54%       0.0095      99.73%    0.00167     14.8  *mejor
+ 10            0.0384      99.01%       0.0161      99.49%    0.00159     23.4
+ 11            0.0386      98.98%       0.0109      99.69%    0.00150     23.8
+ 12            0.0363      99.01%       0.0112      99.71%    0.00141     22.8
+ 13            0.0308      99.15%       0.0216      99.26%    0.00131     23.5
+ 14            0.0251      99.36%       0.0110      99.63%    0.00121     22.8
+ 15            0.0235      99.40%       0.0080      99.80%    0.00110     22.8  *mejor
+ 16            0.0241      99.39%       0.0118      99.68%    0.00100      8.3
+ 17            0.0257      99.30%       0.0105      99.60%    0.00090      8.3
+ 18            0.0203      99.54%       0.0093      99.72%    0.00079     15.6
+ 19            0.0158      99.63%       0.0056      99.89%    0.00069     22.8  *mejor
+ 20            0.0135      99.72%       0.0072      99.82%    0.00059     22.7
+ 21            0.0123      99.72%       0.0076      99.74%    0.00050     23.7
+ 22            0.0108      99.75%       0.0144      99.50%    0.00041     23.2
+ 23            0.0092      99.82%       0.0064      99.85%    0.00033     22.7
+ 24            0.0103      99.79%       0.0042      99.86%    0.00026     23.3
+ 25            0.0090      99.81%       0.0043      99.89%    0.00019     23.7
+ 26            0.0075      99.85%       0.0030      99.91%    0.00013     23.8  *mejor
+ 27            0.0065      99.90%       0.0038      99.87%    0.00009     23.8
+ 28            0.0059      99.91%       0.0039      99.86%    0.00005     23.5
+ 29            0.0064      99.89%       0.0035      99.89%    0.00002     24.3
+ 30            0.0063      99.88%       0.0035      99.87%    0.00001     22.9
+
+ Evaluacion del MODELO B:
+   entrenamiento                      accuracy  100.00%   F1 macro 1.0000
+   validacion                         accuracy   99.91%   F1 macro 0.9983
+   prueba                             accuracy   99.52%   F1 macro 0.9915
+
+   Brecha entrenamiento - validacion: 0.09 puntos porcentuales
+
+======================================================================================
+ 4. COMPARACION DE LOS DOS MODELOS
+======================================================================================
+                                            MODELO A     MODELO B     cambio
+ Parametros entrenables                    2,185,291      309,771       7.1x
+ Accuracy entrenamiento (%)                   100.00       100.00      +0.00
+ Accuracy validacion (%)                       97.82        99.91      +2.09
+ Accuracy PRUEBA (%)                           97.31        99.52      +2.22
+ F1 macro PRUEBA                              0.9602       0.9915    +0.0313
+ Brecha train - val (pp)                        2.18         0.09      -2.09
+
+ Errores sobre las 12,630 imagenes de prueba: 340 -> 60  (82% menos)
+
+======================================================================================
+ 5. ANALISIS DETALLADO DEL MODELO FINAL EN PRUEBA
+======================================================================================
+                            precision    recall  f1-score   support
+
+            Limite 20 km/h      1.000     1.000     1.000        60
+            Limite 30 km/h      0.992     1.000     0.996       720
+            Limite 50 km/h      0.997     0.999     0.998       750
+            Limite 60 km/h      0.998     0.991     0.994       450
+            Limite 70 km/h      1.000     0.997     0.998       660
+            Limite 80 km/h      0.992     0.995     0.994       630
+        Fin limite 80 km/h      0.993     0.993     0.993       150
+           Limite 100 km/h      0.996     0.998     0.997       450
+           Limite 120 km/h      0.996     0.989     0.992       450
+         Prohibido rebasar      1.000     1.000     1.000       480
+Prohibido rebasar camiones      0.998     0.998     0.998       660
+        Prioridad en cruce      0.998     0.998     0.998       420
+            Via preferente      1.000     0.997     0.999       690
+              Ceda el paso      1.000     0.997     0.999       720
+                      Alto      0.996     1.000     0.998       270
+     Circulacion prohibida      1.000     1.000     1.000       210
+        Prohibido camiones      1.000     1.000     1.000       150
+         Prohibido el paso      1.000     1.000     1.000       360
+        Precaucion general      1.000     0.985     0.992       390
+ Curva peligrosa izquierda      1.000     1.000     1.000        60
+   Curva peligrosa derecha      0.978     1.000     0.989        90
+          Curvas sucesivas      0.918     1.000     0.957        90
+          Camino irregular      1.000     0.933     0.966       120
+       Pavimento resbaloso      0.987     1.000     0.993       150
+    Estrechamiento derecha      1.000     1.000     1.000        90
+           Obras en la via      0.988     0.996     0.992       480
+                  Semaforo      1.000     1.000     1.000       180
+                  Peatones      0.962     0.833     0.893        60
+            Cruce de niños      0.955     1.000     0.977       150
+        Cruce de ciclistas      0.957     1.000     0.978        90
+             Hielo o nieve      1.000     0.960     0.980       150
+         Cruce de animales      1.000     1.000     1.000       270
+      Fin de restricciones      0.984     1.000     0.992        60
+  Giro obligatorio derecha      0.995     1.000     0.998       210
+Giro obligatorio izquierda      1.000     1.000     1.000       120
+            Siga de frente      0.997     0.997     0.997       390
+  Siga de frente o derecha      1.000     1.000     1.000       120
+Siga de frente o izquierda      1.000     1.000     1.000        60
+    Circule por la derecha      0.997     0.997     0.997       690
+  Circule por la izquierda      1.000     0.978     0.989        90
+      Glorieta obligatoria      0.978     1.000     0.989        90
+     Fin prohibido rebasar      1.000     1.000     1.000        60
+Fin prohibido rebasar cami      1.000     1.000     1.000        90
+
+                  accuracy                          0.995     12630
+                 macro avg      0.992     0.991     0.991     12630
+              weighted avg      0.995     0.995     0.995     12630
+
+
+======================================================================================
+ 6. GRAFICAS
+======================================================================================
+   figura guardada: figuras/curvas_entrenamiento.png
+   figura guardada: figuras/comparacion_modelos.png
+   figura guardada: figuras/matriz_confusion.png
+   figura guardada: figuras/accuracy_por_clase.png
+   figura guardada: figuras/errores.png
+
+======================================================================================
+ 7. GUARDADO DEL MODELO
+======================================================================================
+ Modelo guardado en modelo_gtsrb.pt (1.3 MB)
+ Historial de entrenamiento guardado en historial.json
+
+ Para hacer predicciones desde la consola:  python3 predecir.py
+
+ Listo.

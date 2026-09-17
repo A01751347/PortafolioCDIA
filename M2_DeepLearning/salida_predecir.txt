@@ -1,0 +1,101 @@
+============================================================================
+ CLASIFICADOR DE SEÑALES DE TRANSITO
+============================================================================
+ Modelo    : CNN entrenada sobre GTSRB (43 clases)
+ Dispositivo: mps
+ Accuracy del modelo en el conjunto de prueba: 99.52%
+
+ --------------------------------------------------------------------------
+ Imagen 1
+   clase real : 28  Cruce de niños
+   PREDICCION : 28  Cruce de niños   CORRECTO
+   las 3 clases mas probables:
+     1. Cruce de niños               100.00%  #######################################
+     2. Cruce de ciclistas             0.00%  
+     3. Limite 60 km/h                 0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 2
+   clase real : 10  Prohibido rebasar camiones
+   PREDICCION : 10  Prohibido rebasar camiones   CORRECTO
+   las 3 clases mas probables:
+     1. Prohibido rebasar camiones   100.00%  #######################################
+     2. Fin prohibido rebasar camion   0.00%  
+     3. Limite 80 km/h                 0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 3
+   clase real : 11  Prioridad en cruce
+   PREDICCION : 11  Prioridad en cruce   CORRECTO
+   las 3 clases mas probables:
+     1. Prioridad en cruce           100.00%  #######################################
+     2. Peatones                       0.00%  
+     3. Hielo o nieve                  0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 4
+   clase real : 28  Cruce de niños
+   PREDICCION : 28  Cruce de niños   CORRECTO
+   las 3 clases mas probables:
+     1. Cruce de niños                99.99%  #######################################
+     2. Cruce de ciclistas             0.01%  
+     3. Prioridad en cruce             0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 5
+   clase real : 11  Prioridad en cruce
+   PREDICCION : 11  Prioridad en cruce   CORRECTO
+   las 3 clases mas probables:
+     1. Prioridad en cruce           100.00%  #######################################
+     2. Hielo o nieve                  0.00%  
+     3. Prohibido camiones             0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 6
+   clase real : 40  Glorieta obligatoria
+   PREDICCION : 40  Glorieta obligatoria   CORRECTO
+   las 3 clases mas probables:
+     1. Glorieta obligatoria          99.90%  #######################################
+     2. Giro obligatorio derecha       0.05%  
+     3. Circule por la izquierda       0.01%  
+
+ --------------------------------------------------------------------------
+ Imagen 7
+   clase real : 16  Prohibido camiones
+   PREDICCION : 16  Prohibido camiones   CORRECTO
+   las 3 clases mas probables:
+     1. Prohibido camiones           100.00%  #######################################
+     2. Hielo o nieve                  0.00%  
+     3. Limite 100 km/h                0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 8
+   clase real : 38  Circule por la derecha
+   PREDICCION : 38  Circule por la derecha   CORRECTO
+   las 3 clases mas probables:
+     1. Circule por la derecha       100.00%  #######################################
+     2. Fin de restricciones           0.00%  
+     3. Giro obligatorio izquierda     0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 9
+   clase real :  3  Limite 60 km/h
+   PREDICCION :  3  Limite 60 km/h   CORRECTO
+   las 3 clases mas probables:
+     1. Limite 60 km/h               100.00%  #######################################
+     2. Limite 80 km/h                 0.00%  
+     3. Ceda el paso                   0.00%  
+
+ --------------------------------------------------------------------------
+ Imagen 10
+   clase real :  5  Limite 80 km/h
+   PREDICCION :  5  Limite 80 km/h   CORRECTO
+   las 3 clases mas probables:
+     1. Limite 80 km/h               100.00%  #######################################
+     2. Limite 60 km/h                 0.00%  
+     3. Limite 100 km/h                0.00%  
+
+ ==========================================================================
+ Acertadas 10 de 10 (100%)
+   figura guardada: figuras/predicciones.png
+
