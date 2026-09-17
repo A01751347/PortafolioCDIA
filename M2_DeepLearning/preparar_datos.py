@@ -1,60 +1,16 @@
 """
-================================================================================
- PREPARACION DEL DATASET GTSRB
-================================================================================
+Prepara el dataset GTSRB (señales de transito alemanas).
 
- Modulo 2 - Portafolio de Implementacion (Deep Learning)
- Santiago Serrano Montalvo - A01751347
+Descarga los ZIP oficiales, recorta cada foto a la region donde esta la señal,
+la deja en 32x32 y guarda todo en datos/gtsrb_32.npz.
 
- QUE ES GTSRB
- ------------
- German Traffic Sign Recognition Benchmark. Son fotografias REALES de señales
- de transito tomadas desde una camara montada en un auto circulando por
- carreteras de Alemania. No es un dataset sintetico ni un ejemplo de clase:
- fue publicado para la competencia IJCNN 2011 y sigue siendo el estandar para
- medir reconocimiento de señales.
+Las fotos de entrenamiento NO son independientes: cada señal fisica se
+fotografio 30 veces seguidas mientras el auto se le acercaba, y esas 30 forman
+una "pista" que se reconoce en el nombre del archivo (00012_00007.ppm -> pista
+12). Por eso la validacion se separa por PISTA COMPLETA: si se partiera al azar
+caerian fotos casi identicas de los dos lados y el resultado saldria inflado.
 
-   * 39,209 imagenes de entrenamiento
-   * 12,630 imagenes de prueba (conjunto oficial, con sus etiquetas aparte)
-   * 43 clases (limites de velocidad, alto, ceda el paso, prohibiciones, etc.)
-   * Tamaño variable, desde ~15x15 hasta ~250x250 pixeles
-   * Condiciones reales: desenfoque de movimiento, sombras, contraluz, lluvia,
-     señales parcialmente tapadas y muy distintos tamaños segun la distancia
-
- DETALLE CRITICO: LAS "PISTAS" (TRACKS)
- --------------------------------------
- Las imagenes de entrenamiento NO son independientes. Cada señal fisica fue
- fotografiada 30 veces seguidas mientras el auto se le acercaba, y esas 30
- fotos forman una "pista" (track). Se reconocen por el nombre del archivo:
-
-       00012_00007.ppm
-       ^^^^^ pista     ^^^^^ cuadro dentro de la pista
-
- Las 30 fotos de una misma pista son casi identicas. Si la particion de
- validacion se hiciera al azar, cuadros de la misma señal caerian en
- entrenamiento y en validacion a la vez, y el modelo obtendria una puntuacion
- inflada por reconocer una foto casi repetida en lugar de generalizar.
-
- POR ESO LA VALIDACION SE SEPARA POR PISTA COMPLETA: una señal fisica esta
- entera en entrenamiento o entera en validacion, nunca repartida.
-
- QUE HACE ESTE ARCHIVO
- ---------------------
-   1. Descarga los tres archivos ZIP oficiales (si no estan ya en datos/).
-   2. Los descomprime.
-   3. Recorta cada imagen a la region de interes que marca la anotacion,
-      la redimensiona a 32x32 y la guarda como arreglo de enteros.
-   4. Separa entrenamiento y validacion POR PISTA.
-   5. Guarda todo en datos/gtsrb_32.npz para que el entrenamiento no tenga
-      que volver a leer 51,839 archivos sueltos.
-
- EJECUCION
- ---------
-       python3 preparar_datos.py
-
- Solo hay que correrlo una vez. main.py lo invoca automaticamente si hace falta.
-
-================================================================================
+Ejecutar: python3 preparar_datos.py    (solo hace falta una vez)
 """
 
 import csv
@@ -119,7 +75,6 @@ def barra_progreso(bloques, tamano_bloque, tamano_total):
 
 
 def descargar_si_falta():
-    """Baja los ZIP oficiales solo si no estan ya en la carpeta datos/."""
     if not os.path.isdir(CARPETA_DATOS):
         os.makedirs(CARPETA_DATOS)
 
@@ -137,7 +92,6 @@ def descargar_si_falta():
 
 
 def descomprimir_si_falta():
-    """Descomprime los ZIP solo si la carpeta GTSRB todavia no esta armada."""
     marca = os.path.join(CARPETA_DATOS, "GTSRB", "Final_Training", "Images")
 
     if os.path.isdir(marca):
@@ -156,12 +110,8 @@ def descomprimir_si_falta():
 # ==============================================================================
 
 def leer_imagen(ruta, x1, y1, x2, y2):
-    """Abre una imagen .ppm, la recorta a su region de interes y la escala.
-
-    El dataset incluye las coordenadas del rectangulo que contiene la señal.
-    Recortar por ahi quita el fondo (asfalto, cielo, arboles) que no aporta
-    nada y hace que la señal ocupe siempre una porcion parecida de la imagen.
-    """
+    # Recortar por la region de interes quita el asfalto y el cielo, que no
+    # aportan nada, y deja la señal siempre del mismo tamaño relativo.
     with Image.open(ruta) as imagen:
         imagen = imagen.convert("RGB")
         imagen = imagen.crop((x1, y1, x2, y2))
@@ -170,7 +120,6 @@ def leer_imagen(ruta, x1, y1, x2, y2):
 
 
 def cargar_entrenamiento():
-    """Recorre las 43 carpetas de entrenamiento y devuelve imagenes, clases y pistas."""
     raiz = os.path.join(CARPETA_DATOS, "GTSRB", "Final_Training", "Images")
 
     imagenes, clases, pistas = [], [], []
@@ -199,7 +148,6 @@ def cargar_entrenamiento():
 
 
 def cargar_prueba():
-    """Lee el conjunto de prueba OFICIAL con sus etiquetas."""
     raiz = os.path.join(CARPETA_DATOS, "GTSRB", "Final_Test", "Images")
     anotaciones = os.path.join(CARPETA_DATOS, "GT-final_test.csv")
 
@@ -222,12 +170,8 @@ def cargar_prueba():
 # ==============================================================================
 
 def separar_por_pista(imagenes, clases, pistas):
-    """Reparte las PISTAS (no las imagenes) entre entrenamiento y validacion.
-
-    Se sortean las pistas de cada clase por separado para que la validacion
-    conserve la proporcion de clases del dataset original. Todas las fotos de
-    una misma señal fisica viajan juntas.
-    """
+    # Se sortean las pistas de cada clase por separado para que la validacion
+    # conserve la proporcion de clases del dataset.
     generador = np.random.default_rng(SEMILLA)
 
     pistas_validacion = set()
@@ -250,7 +194,6 @@ def separar_por_pista(imagenes, clases, pistas):
 # ==============================================================================
 
 def preparar(forzar=False):
-    """Deja listo datos/gtsrb_32.npz y devuelve su ruta."""
     if os.path.exists(RUTA_NPZ) and not forzar:
         print(" El archivo datos/gtsrb_32.npz ya existe; no hay nada que preparar.")
         return RUTA_NPZ
@@ -293,7 +236,6 @@ def preparar(forzar=False):
 
 
 def cargar():
-    """Devuelve los seis arreglos, preparandolos antes si es necesario."""
     if not os.path.exists(RUTA_NPZ):
         preparar()
 

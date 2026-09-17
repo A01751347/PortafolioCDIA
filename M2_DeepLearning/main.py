@@ -1,66 +1,11 @@
 """
-================================================================================
- RED NEURONAL CONVOLUCIONAL PARA RECONOCIMIENTO DE SEÑALES DE TRANSITO
-================================================================================
+Red neuronal convolucional para reconocer señales de transito.
 
- Modulo 2 - Portafolio de Implementacion (Deep Learning)
- Santiago Serrano Montalvo - A01751347
+Clasifica fotografias reales de 43 señales del dataset GTSRB, tomadas desde un
+auto en movimiento. Entrena dos modelos: uno inicial sin regularizacion y una
+version mejorada, para comparar y documentar que cambios funcionaron.
 
- PROBLEMA
- --------
- Clasificar en cual de 43 señales de transito corresponde una fotografia
- tomada desde un auto en movimiento. Es el problema de percepcion mas basico
- de un sistema de asistencia al conductor: si el vehiculo no lee la señal, no
- puede avisar que el limite bajo a 30 ni que viene un alto.
-
- DATASET
- -------
- GTSRB (German Traffic Sign Recognition Benchmark). Fotografias reales
- capturadas en carreteras de Alemania. Ver preparar_datos.py para el detalle.
-
-     Entrenamiento  31,380 imagenes   (pistas de entrenamiento)
-     Validacion      7,829 imagenes   (pistas separadas, ninguna compartida)
-     Prueba         12,630 imagenes   (conjunto oficial del benchmark)
-
- POR QUE UNA RED CONVOLUCIONAL Y NO UN PERCEPTRON
- ------------------------------------------------
- Una imagen de 32x32 en color tiene 3,072 numeros. Una capa densa conectada a
- todos ellos tendria que aprender por separado que un borde rojo en la esquina
- superior izquierda significa lo mismo que un borde rojo en el centro.
-
- La convolucion resuelve esto con dos propiedades:
-
-   PESOS COMPARTIDOS   un filtro de 3x3 se desliza por toda la imagen. Los
-                       mismos 9 pesos detectan el borde este donde este, asi
-                       que el modelo aprende la forma una sola vez.
-   LOCALIDAD           cada neurona solo mira una vecindad pequeña. Al apilar
-                       capas, el campo receptivo crece: la primera capa ve
-                       bordes, la segunda esquinas y arcos, la tercera la
-                       silueta completa del triangulo o del circulo.
-
- Esto es lo que hace que la arquitectura sea PROFUNDA en el sentido util: la
- jerarquia de representaciones se construye sola, capa sobre capa.
-
- LOS DOS MODELOS QUE SE COMPARAN
- -------------------------------
- MODELO A - aproximacion inicial
-     CNN sencilla, sin ninguna tecnica de regularizacion y sin aumento de
-     datos. Sirve para medir el punto de partida y ver que problema aparece.
-
- MODELO B - version mejorada
-     Sobre la misma idea se agregan, una por una, las tecnicas que atacan el
-     problema que MODELO A deja ver. Cada una esta justificada en el codigo
-     y su efecto se mide en el reporte.
-
- EJECUCION
- ---------
-       python3 main.py                  entrena los dos modelos y genera todo
-       python3 main.py --epocas 5       corrida corta para probar que funciona
-
- Al terminar deja el modelo entrenado en modelo_gtsrb.pt, listo para que
- predecir.py lo use desde la consola.
-
-================================================================================
+Ejecutar: python3 main.py            (o --epocas 5 para una corrida corta)
 """
 
 import argparse
@@ -77,6 +22,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
 
 from sklearn.metrics import confusion_matrix, classification_report, f1_score
 
@@ -84,72 +30,55 @@ import preparar_datos
 from preparar_datos import NOMBRES_CLASES
 
 
-# ==============================================================================
+# -----------------------------
 # CONFIGURACION
-# ==============================================================================
+# -----------------------------
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
-CARPETA_FIGURAS = os.path.join(CARPETA, "figuras")
+FIGURAS = os.path.join(CARPETA, "figuras")
 RUTA_MODELO = os.path.join(CARPETA, "modelo_gtsrb.pt")
 RUTA_HISTORIAL = os.path.join(CARPETA, "historial.json")
 
 N_CLASES = 43
 LOTE = 128
 SEMILLA = 42
+PACIENCIA = 8  # epocas sin mejorar antes de cortar el entrenamiento
 
-# Paciencia del early stopping: epocas seguidas sin mejorar la validacion
-# antes de cortar. Evita seguir entrenando cuando el modelo ya solo memoriza.
-PACIENCIA = 8
-
-
-def elegir_dispositivo():
-    """Usa la GPU integrada de Apple (MPS) si esta disponible; si no, la CPU."""
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
+if torch.backends.mps.is_available():
+    DISPOSITIVO = torch.device("mps")
+elif torch.cuda.is_available():
+    DISPOSITIVO = torch.device("cuda")
+else:
+    DISPOSITIVO = torch.device("cpu")
 
 
-DISPOSITIVO = elegir_dispositivo()
+# -----------------------------
+# DATOS Y AUMENTO
+# -----------------------------
+# Rotacion, traslacion y escala reproducen que la camara nunca ve la señal bien
+# encuadrada; brillo y contraste reproducen sol de frente, sombra y tunel.
+#
+# NO se usa RandomHorizontalFlip, que es el aumento por defecto en vision: aqui
+# espejar "curva peligrosa izquierda" produce la señal de "curva peligrosa
+# derecha", que es OTRA clase del dataset. Pasaria igual con los giros
+# obligatorios y con "circule por la derecha / izquierda".
 
+AUMENTO = transforms.Compose([
+    transforms.RandomAffine(degrees=12, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+    transforms.ColorJitter(brightness=0.3, contrast=0.3),
+])
 
-def guardar(nombre):
-    if not os.path.isdir(CARPETA_FIGURAS):
-        os.makedirs(CARPETA_FIGURAS)
-    ruta = os.path.join(CARPETA_FIGURAS, nombre)
-    plt.savefig(ruta, dpi=140, bbox_inches="tight")
-    plt.close()
-    print("   figura guardada: figuras/" + nombre)
-
-
-def titulo(texto):
-    print("\n" + "=" * 86)
-    print(" " + texto)
-    print("=" * 86)
-
-
-# ==============================================================================
-# 1. DATOS
-# ==============================================================================
 
 class DatasetSenales(Dataset):
-    """Envuelve los arreglos de numpy para que PyTorch pueda iterarlos por lotes.
-
-    Las imagenes se guardan como enteros de 0 a 255 para ocupar poca memoria y
-    se convierten a flotantes normalizados al momento de entregar cada muestra.
-
-    Si `aumentar` es True se aplica el aumento de datos descrito mas abajo. El
-    aumento SOLO se activa en entrenamiento: validacion y prueba deben medirse
-    siempre sobre la imagen original, sin alterar.
-    """
+    # Las imagenes se guardan como enteros de 0 a 255 para ocupar poca memoria
+    # y se convierten a flotantes normalizados al entregar cada muestra.
 
     def __init__(self, imagenes, clases, media, desviacion, aumentar=False):
         self.imagenes = imagenes
         self.clases = clases.astype(np.int64)
         self.media = torch.tensor(media, dtype=torch.float32).view(3, 1, 1)
         self.desviacion = torch.tensor(desviacion, dtype=torch.float32).view(3, 1, 1)
-        self.aumentar = aumentar
+        self.aumentar = aumentar  # solo en entrenamiento
 
     def __len__(self):
         return len(self.imagenes)
@@ -158,83 +87,28 @@ class DatasetSenales(Dataset):
         imagen = torch.from_numpy(self.imagenes[indice]).permute(2, 0, 1).float() / 255.0
 
         if self.aumentar:
-            imagen = aplicar_aumento(imagen)
+            imagen = AUMENTO(imagen)
 
-        imagen = (imagen - self.media) / self.desviacion
-        return imagen, self.clases[indice]
-
-
-def aplicar_aumento(imagen):
-    """Aumento de datos pensado especificamente para señales de transito.
-
-    QUE SE HACE Y POR QUE
-    ---------------------
-    ROTACION +-12 grados, TRASLACION +-10%, ESCALA 0.9 a 1.1
-        Reproduce que la camara nunca ve la señal perfectamente encuadrada:
-        el auto se acerca (escala), la señal aparece descentrada (traslacion)
-        y el poste puede estar ligeramente inclinado (rotacion).
-
-    BRILLO y CONTRASTE +-30%
-        Reproduce sol de frente, sombra de un arbol, tunel y dia nublado, que
-        es la fuente de variacion mas grande del dataset real.
-
-    QUE NO SE HACE Y POR QUE
-    ------------------------
-    NO se espeja la imagen horizontalmente. Es el aumento por defecto en casi
-    cualquier problema de vision, pero aqui seria un error grave: espejar
-    "curva peligrosa a la izquierda" produce exactamente la señal de "curva
-    peligrosa a la derecha", que es OTRA clase del dataset. Lo mismo pasa con
-    los giros obligatorios y con "circule por la derecha / izquierda". El
-    modelo terminaria entrenandose con etiquetas equivocadas.
-
-    Este es el punto donde el conocimiento del problema manda sobre la receta
-    generica de aumento de datos.
-    """
-    # --- transformacion geometrica, hecha con una matriz afin 2x3 ---
-    angulo = np.random.uniform(-12, 12) * np.pi / 180.0
-    escala = np.random.uniform(0.9, 1.1)
-    corrimiento_x = np.random.uniform(-0.1, 0.1)
-    corrimiento_y = np.random.uniform(-0.1, 0.1)
-
-    coseno = np.cos(angulo) / escala
-    seno = np.sin(angulo) / escala
-
-    matriz = torch.tensor([[coseno, -seno, corrimiento_x],
-                           [seno, coseno, corrimiento_y]], dtype=torch.float32)
-
-    rejilla = F.affine_grid(matriz.unsqueeze(0), (1, 3, 32, 32), align_corners=False)
-    imagen = F.grid_sample(imagen.unsqueeze(0), rejilla,
-                           padding_mode="border", align_corners=False).squeeze(0)
-
-    # --- brillo y contraste ---
-    imagen = imagen * np.random.uniform(0.7, 1.3)                       # brillo
-    promedio = imagen.mean()
-    imagen = (imagen - promedio) * np.random.uniform(0.7, 1.3) + promedio  # contraste
-
-    return imagen.clamp(0.0, 1.0)
+        return (imagen - self.media) / self.desviacion, self.clases[indice]
 
 
 def estadisticas(imagenes):
-    """Media y desviacion de cada canal de color, calculadas SOLO con entrenamiento."""
+    # Media y desviacion de cada canal, calculadas solo con entrenamiento.
     muestra = imagenes.astype(np.float32) / 255.0
     return muestra.mean(axis=(0, 1, 2)), muestra.std(axis=(0, 1, 2))
 
 
-# ==============================================================================
-# 2. ARQUITECTURAS
-# ==============================================================================
+# -----------------------------
+# LOS DOS MODELOS
+# -----------------------------
+# Una capa densa sobre los 3072 pixeles tendria que aprender por separado que
+# un borde rojo arriba significa lo mismo que uno al centro. La convolucion no:
+# el mismo filtro de 3x3 se desliza por toda la imagen, asi que la forma se
+# aprende una sola vez, y al apilar capas el campo receptivo crece hasta cubrir
+# la silueta completa de la señal.
 
 class ModeloBase(nn.Module):
-    """MODELO A - aproximacion inicial, deliberadamente sin regularizacion.
-
-        entrada 3x32x32
-          bloque 1:  Conv 3->32   ReLU   Conv 32->32   ReLU   MaxPool  -> 32x16x16
-          bloque 2:  Conv 32->64  ReLU   Conv 64->64   ReLU   MaxPool  -> 64x8x8
-          aplanado (4096)  ->  Densa 512  ReLU  ->  Densa 43
-
-    No lleva BatchNorm, ni Dropout, ni weight decay, ni aumento de datos.
-    Es el punto de partida contra el cual se mide todo lo demas.
-    """
+    # Version inicial: 4 convoluciones y 2 densas, sin ninguna regularizacion.
 
     def __init__(self):
         super().__init__()
@@ -256,35 +130,10 @@ class ModeloBase(nn.Module):
 
 
 class ModeloMejorado(nn.Module):
-    """MODELO B - version mejorada. Cada cambio ataca un problema concreto.
-
-        entrada 3x32x32
-          bloque 1:  [Conv 3->32  + BN + ReLU] x2   MaxPool   Dropout(0.2) -> 32x16x16
-          bloque 2:  [Conv 32->64 + BN + ReLU] x2   MaxPool   Dropout(0.3) -> 64x8x8
-          bloque 3:  [Conv 64->128+ BN + ReLU] x2   MaxPool   Dropout(0.4) -> 128x4x4
-          GlobalAvgPool (128)  ->  Densa 128  BN  ReLU  Dropout(0.5)  ->  Densa 43
-
-    CAMBIO 1 - BatchNorm despues de cada convolucion
-        Normaliza las activaciones de cada lote. Estabiliza el entrenamiento,
-        permite una tasa de aprendizaje mas alta y agrega un ruido leve que
-        por si mismo ya regulariza.
-
-    CAMBIO 2 - Dropout creciente (0.2 / 0.3 / 0.4 / 0.5)
-        Apaga neuronas al azar en cada paso, asi ninguna se vuelve
-        indispensable y la red se ve obligada a repartir la representacion.
-        Se usa poco al principio (las primeras capas detectan bordes, que
-        siempre hacen falta) y mucho al final, que es donde se memoriza.
-
-    CAMBIO 3 - un tercer bloque convolucional
-        Sube el campo receptivo y deja que la red arme la silueta completa de
-        la señal, no solo sus bordes.
-
-    CAMBIO 4 - Global Average Pooling en lugar de aplanar
-        Aplanar 64x8x8 hacia una densa de 512 costaba 2.1 millones de pesos,
-        casi todos los del MODELO A, y es justo donde ocurre la memorizacion.
-        Promediar cada mapa de activacion deja 128 numeros: la parte densa
-        pasa a ser minuscula y el modelo se apoya en las convoluciones.
-    """
+    # BatchNorm estabiliza el entrenamiento, el dropout crece hacia el final
+    # (las primeras capas detectan bordes, que siempre hacen falta) y el global
+    # average pooling sustituye a la densa de 512, que era donde estaban casi
+    # todos los parametros y donde ocurria la memorizacion.
 
     def __init__(self):
         super().__init__()
@@ -316,9 +165,7 @@ class ModeloMejorado(nn.Module):
         x = self.drop1(self.bloque1(x))
         x = self.drop2(self.bloque2(x))
         x = self.drop3(self.bloque3(x))
-
-        x = F.adaptive_avg_pool2d(x, 1).flatten(1)   # global average pooling
-
+        x = F.adaptive_avg_pool2d(x, 1).flatten(1)
         x = self.drop4(F.relu(self.norma(self.densa1(x))))
         return self.densa2(x)
 
@@ -327,12 +174,12 @@ def contar_parametros(modelo):
     return sum(p.numel() for p in modelo.parameters() if p.requires_grad)
 
 
-# ==============================================================================
-# 3. ENTRENAMIENTO
-# ==============================================================================
+# -----------------------------
+# ENTRENAMIENTO
+# -----------------------------
 
 def una_pasada(modelo, cargador, criterio, optimizador=None):
-    """Recorre el cargador una vez. Si hay optimizador, entrena; si no, evalua."""
+    # Con optimizador entrena, sin el solo evalua.
     entrenando = optimizador is not None
     modelo.train() if entrenando else modelo.eval()
 
@@ -342,8 +189,8 @@ def una_pasada(modelo, cargador, criterio, optimizador=None):
 
     with torch.set_grad_enabled(entrenando):
         for imagenes, clases in cargador:
-            imagenes = imagenes.to(DISPOSITIVO, non_blocking=True)
-            clases = clases.to(DISPOSITIVO, non_blocking=True)
+            imagenes = imagenes.to(DISPOSITIVO)
+            clases = clases.to(DISPOSITIVO)
 
             salida = modelo(imagenes)
             perdida = criterio(salida, clases)
@@ -361,38 +208,28 @@ def una_pasada(modelo, cargador, criterio, optimizador=None):
 
 
 def entrenar(modelo, nombre, cargador_train, cargador_val, epocas,
-             tasa=1e-3, weight_decay=0.0, usar_scheduler=False, early_stopping=False):
-    """Entrena un modelo y devuelve el historial epoca por epoca.
-
-    tasa             tasa de aprendizaje inicial del optimizador Adam.
-    weight_decay     penalizacion L2 sobre los pesos. Empuja los pesos hacia
-                     cero y con eso limita cuanto puede especializarse la red.
-    usar_scheduler   baja la tasa de aprendizaje siguiendo un coseno. Al
-                     principio conviene avanzar rapido y al final afinar con
-                     pasos chicos para asentarse en el minimo.
-    early_stopping   guarda los pesos de la mejor epoca en validacion y corta
-                     si pasan PACIENCIA epocas sin mejorar. Es la
-                     regularizacion mas directa: detiene el entrenamiento
-                     justo antes de que empiece a memorizar.
-    """
+             tasa=1e-3, weight_decay=0.0, scheduler=False, early_stopping=False):
     modelo = modelo.to(DISPOSITIVO)
     criterio = nn.CrossEntropyLoss()
+
+    # weight_decay es la penalizacion L2: empuja los pesos hacia cero.
     optimizador = torch.optim.Adam(modelo.parameters(), lr=tasa, weight_decay=weight_decay)
 
+    # El coseno baja la tasa poco a poco: avanzar rapido al inicio y afinar al final.
     planificador = None
-    if usar_scheduler:
+    if scheduler:
         planificador = torch.optim.lr_scheduler.CosineAnnealingLR(optimizador, T_max=epocas)
 
-    historial = {"perdida_train": [], "perdida_val": [],
-                 "acc_train": [], "acc_val": [], "tasa": []}
+    historial = {"perdida_train": [], "perdida_val": [], "acc_train": [],
+                 "acc_val": [], "tasa": [], "nombre": nombre}
 
     mejor_acc = 0.0
     mejores_pesos = None
     sin_mejorar = 0
 
-    print("\n {:<7} {:>12} {:>11} {:>12} {:>11} {:>10} {:>8}".format(
+    print("\n {:<7} {:>12} {:>11} {:>12} {:>11} {:>10} {:>7}".format(
         "epoca", "perdida tr", "acc tr", "perdida val", "acc val", "tasa", "seg"))
-    print(" " + "-" * 82)
+    print(" " + "-" * 80)
 
     for epoca in range(1, epocas + 1):
         inicio = time.time()
@@ -419,45 +256,38 @@ def entrenar(modelo, nombre, cargador_train, cargador_val, epocas,
         else:
             sin_mejorar += 1
 
-        print(" {:<7} {:>12.4f} {:>10.2f}% {:>12.4f} {:>10.2f}% {:>10.5f} {:>8.1f}{}".format(
+        print(" {:<7} {:>12.4f} {:>10.2f}% {:>12.4f} {:>10.2f}% {:>10.5f} {:>7.1f}{}".format(
             epoca, perdida_tr, acc_tr * 100, perdida_va, acc_va * 100,
             tasa_actual, time.time() - inicio, marca))
 
         if early_stopping and sin_mejorar >= PACIENCIA:
-            print("\n Early stopping: {} epocas sin mejorar la validacion.".format(PACIENCIA))
-            print(" Se conservan los pesos de la mejor epoca (acc val {:.2f}%).".format(
-                mejor_acc * 100))
+            print("\n Early stopping:", PACIENCIA, "epocas sin mejorar.")
             break
 
-    # Con early stopping se devuelven los mejores pesos, no los ultimos.
+    # Se conservan los pesos de la mejor epoca, no los de la ultima.
     if early_stopping and mejores_pesos is not None:
         modelo.load_state_dict(mejores_pesos)
 
-    historial["nombre"] = nombre
     historial["mejor_acc_val"] = mejor_acc
     return modelo, historial
 
 
-# ==============================================================================
-# 4. EVALUACION
-# ==============================================================================
+# -----------------------------
+# EVALUACION
+# -----------------------------
 
 def predecir_conjunto(modelo, cargador):
-    """Devuelve las clases reales, las predichas y las probabilidades."""
     modelo.eval()
     reales, predichas, probabilidades = [], [], []
 
     with torch.no_grad():
         for imagenes, clases in cargador:
-            salida = modelo(imagenes.to(DISPOSITIVO))
-            probas = F.softmax(salida, dim=1).cpu().numpy()
-
+            probas = F.softmax(modelo(imagenes.to(DISPOSITIVO)), dim=1).cpu().numpy()
             reales.append(clases.numpy())
             predichas.append(probas.argmax(1))
             probabilidades.append(probas)
 
-    return (np.concatenate(reales), np.concatenate(predichas),
-            np.concatenate(probabilidades))
+    return np.concatenate(reales), np.concatenate(predichas), np.concatenate(probabilidades)
 
 
 def evaluar(modelo, cargador, nombre):
@@ -466,18 +296,24 @@ def evaluar(modelo, cargador, nombre):
     acc = (reales == predichas).mean()
     f1m = f1_score(reales, predichas, average="macro", zero_division=0)
 
-    print("   {:<34} accuracy {:>7.2f}%   F1 macro {:.4f}".format(nombre, acc * 100, f1m))
-    return {"accuracy": acc, "f1_macro": f1m, "reales": reales, "predichas": predichas}
+    print("   {:<20} accuracy {:>7.2f}%   F1 macro {:.4f}".format(nombre, acc * 100, f1m))
+    return {"accuracy": acc, "f1_macro": f1m}
 
 
-# ==============================================================================
-# 5. GRAFICAS
-# ==============================================================================
+# -----------------------------
+# GRAFICAS
+# -----------------------------
 
-def graficar_muestra(X, y, nombre):
-    """Muestra imagenes del dataset para dejar ver como son los datos reales."""
-    generador = np.random.default_rng(SEMILLA)
-    indices = generador.choice(len(X), 24, replace=False)
+def guardar(nombre):
+    if not os.path.isdir(FIGURAS):
+        os.makedirs(FIGURAS)
+    plt.savefig(os.path.join(FIGURAS, nombre), dpi=140, bbox_inches="tight")
+    plt.close()
+    print("   figura guardada: figuras/" + nombre)
+
+
+def graficar_muestra(X, y):
+    indices = np.random.default_rng(SEMILLA).choice(len(X), 24, replace=False)
 
     fig, ejes = plt.subplots(3, 8, figsize=(15, 7.8))
     for eje, indice in zip(ejes.ravel(), indices):
@@ -486,16 +322,13 @@ def graficar_muestra(X, y, nombre):
                       fontsize=7.5, pad=5)
         eje.axis("off")
 
-    plt.suptitle("GTSRB: fotografias reales tomadas desde un auto en movimiento\n"
-                 "(desenfoque, sombras, contraluz y encuadres distintos)", fontsize=12)
+    plt.suptitle("GTSRB: fotografias reales tomadas desde un auto en movimiento", fontsize=12)
     plt.tight_layout(h_pad=2.2)
-    guardar(nombre)
+    guardar("muestra_dataset.png")
 
 
-def graficar_aumento(X, media, desviacion, nombre):
-    """Compara una imagen original con varias versiones aumentadas."""
-    generador = np.random.default_rng(7)
-    indices = generador.choice(len(X), 4, replace=False)
+def graficar_aumento(X):
+    indices = np.random.default_rng(7).choice(len(X), 4, replace=False)
 
     fig, ejes = plt.subplots(4, 7, figsize=(13, 7.6))
 
@@ -507,59 +340,49 @@ def graficar_aumento(X, media, desviacion, nombre):
         ejes[fila, 0].axis("off")
 
         for columna in range(1, 7):
-            aumentada = aplicar_aumento(original.clone())
+            aumentada = AUMENTO(original.clone()).clamp(0, 1)
             ejes[fila, columna].imshow(aumentada.permute(1, 2, 0).numpy())
             ejes[fila, columna].set_title("aumentada", fontsize=8)
             ejes[fila, columna].axis("off")
 
     plt.suptitle("Aumento de datos: rotacion, traslacion, escala, brillo y contraste\n"
-                 "(NO se espeja la imagen: convertiria 'curva izquierda' en 'curva derecha')",
+                 "(sin espejado horizontal: convertiria 'curva izquierda' en 'curva derecha')",
                  fontsize=12)
     plt.tight_layout()
-    guardar(nombre)
+    guardar("aumento_datos.png")
 
 
-def graficar_entrenamiento(historiales, nombre):
-    """Curvas de perdida y accuracy de los dos modelos, entrenamiento vs validacion."""
+def graficar_entrenamiento(historiales):
     fig, ejes = plt.subplots(2, 2, figsize=(13.5, 9))
 
     for columna, historial in enumerate(historiales):
         epocas = range(1, len(historial["perdida_train"]) + 1)
 
         eje = ejes[0, columna]
-        eje.plot(epocas, historial["perdida_train"], marker="o", ms=3,
-                 color="tab:blue", label="Entrenamiento")
-        eje.plot(epocas, historial["perdida_val"], marker="s", ms=3,
-                 color="tab:orange", label="Validacion")
+        eje.plot(epocas, historial["perdida_train"], marker="o", ms=3, label="Entrenamiento")
+        eje.plot(epocas, historial["perdida_val"], marker="s", ms=3, label="Validacion")
         eje.fill_between(epocas, historial["perdida_train"], historial["perdida_val"],
                          color="tab:red", alpha=0.1)
         eje.set_xlabel("Epoca")
-        eje.set_ylabel("Perdida (entropia cruzada)")
-        eje.set_title("{}\nPerdida".format(historial["nombre"]))
+        eje.set_ylabel("Perdida")
+        eje.set_title(historial["nombre"] + "\nPerdida")
         eje.legend()
         eje.grid(alpha=0.3)
 
         eje = ejes[1, columna]
         eje.plot(epocas, [a * 100 for a in historial["acc_train"]], marker="o", ms=3,
-                 color="tab:blue", label="Entrenamiento")
+                 label="Entrenamiento")
         eje.plot(epocas, [a * 100 for a in historial["acc_val"]], marker="s", ms=3,
-                 color="tab:orange", label="Validacion")
+                 label="Validacion")
         eje.fill_between(epocas, [a * 100 for a in historial["acc_train"]],
                          [a * 100 for a in historial["acc_val"]], color="tab:red", alpha=0.1)
 
-        # Se prefiere la brecha de la EVALUACION FINAL (modelo en modo eval, sobre
-        # datos sin aumentar). La de la ultima epoca esta medida con dropout y
-        # aumento de datos activos, asi que subestima el ajuste del modelo.
-        if "brecha_evaluada" in historial:
-            brecha = historial["brecha_evaluada"] * 100
-            etiqueta = "brecha evaluada = {:.2f} pp".format(brecha)
-        else:
-            brecha = (historial["acc_train"][-1] - historial["acc_val"][-1]) * 100
-            etiqueta = "brecha ultima epoca = {:.2f} pp".format(brecha)
-
-        eje.annotate(etiqueta,
+        # Se anota la brecha de la evaluacion final, no la de la ultima epoca:
+        # esa se mide con dropout y aumento activos, asi que subestima el ajuste.
+        brecha = historial["brecha_evaluada"] * 100
+        eje.annotate("brecha = {:.2f} pp".format(brecha),
                      xy=(len(epocas), (historial["acc_train"][-1] + historial["acc_val"][-1]) * 50),
-                     xytext=(-140, -30), textcoords="offset points", fontsize=9, color="tab:red",
+                     xytext=(-130, -30), textcoords="offset points", fontsize=9, color="tab:red",
                      arrowprops=dict(arrowstyle="->", color="tab:red"))
 
         eje.set_xlabel("Epoca")
@@ -569,25 +392,57 @@ def graficar_entrenamiento(historiales, nombre):
         eje.legend(loc="lower right")
         eje.grid(alpha=0.3)
 
-    plt.suptitle("Aprendizaje de los dos modelos: entrenamiento contra validacion", fontsize=13)
+    plt.suptitle("Entrenamiento contra validacion", fontsize=13)
     plt.tight_layout()
-    guardar(nombre)
+    guardar("curvas_entrenamiento.png")
 
 
-def graficar_matriz(reales, predichas, nombre):
-    """Matriz de confusion 43x43 normalizada por fila."""
+def graficar_comparacion(resultados):
+    x = np.arange(2)
+    a = [resultados["A"]["val"]["accuracy"] * 100, resultados["A"]["test"]["accuracy"] * 100]
+    b = [resultados["B"]["val"]["accuracy"] * 100, resultados["B"]["test"]["accuracy"] * 100]
+
+    fig, ejes = plt.subplots(1, 2, figsize=(13, 5))
+
+    ejes[0].bar(x - 0.18, a, 0.36, label="MODELO A (inicial)", color="tab:red", alpha=0.85)
+    ejes[0].bar(x + 0.18, b, 0.36, label="MODELO B (mejorado)", color="tab:green", alpha=0.85)
+    for i in range(2):
+        ejes[0].text(x[i] - 0.18, a[i] + 0.25, "{:.2f}%".format(a[i]), ha="center", fontsize=9)
+        ejes[0].text(x[i] + 0.18, b[i] + 0.25, "{:.2f}%".format(b[i]), ha="center", fontsize=9)
+    ejes[0].set_xticks(x)
+    ejes[0].set_xticklabels(["Validacion", "Prueba"])
+    ejes[0].set_ylabel("Accuracy (%)")
+    ejes[0].set_ylim(80, 103)
+    ejes[0].set_title("Accuracy de los dos modelos")
+    ejes[0].legend(loc="lower center", fontsize=9)
+    ejes[0].grid(axis="y", alpha=0.3)
+
+    brechas = [resultados["A"]["brecha"] * 100, resultados["B"]["brecha"] * 100]
+    ejes[1].bar(["MODELO A", "MODELO B"], brechas, color=["tab:red", "tab:green"],
+                alpha=0.85, width=0.5)
+    for i, v in enumerate(brechas):
+        ejes[1].text(i, v + 0.05, "{:.2f} pp".format(v), ha="center", fontsize=10)
+    ejes[1].set_ylabel("Brecha entrenamiento - validacion (pp)")
+    ejes[1].set_title("Sobreajuste")
+    ejes[1].grid(axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    guardar("comparacion_modelos.png")
+
+
+def graficar_matriz(reales, predichas):
     matriz = confusion_matrix(reales, predichas, labels=range(N_CLASES)).astype(float)
     normalizada = matriz / np.clip(matriz.sum(axis=1, keepdims=True), 1, None)
 
     plt.figure(figsize=(12.5, 11))
     plt.imshow(normalizada, cmap="Blues", vmin=0, vmax=1)
-    plt.colorbar(label="proporcion de la clase real", fraction=0.046)
+    plt.colorbar(fraction=0.046)
 
-    etiquetas = ["{:>2} {}".format(i, NOMBRES_CLASES[i][:20]) for i in range(N_CLASES)]
     plt.xticks(range(N_CLASES), range(N_CLASES), fontsize=7)
-    plt.yticks(range(N_CLASES), etiquetas, fontsize=7)
+    plt.yticks(range(N_CLASES),
+               ["{:>2} {}".format(i, NOMBRES_CLASES[i][:20]) for i in range(N_CLASES)], fontsize=7)
 
-    # Solo se anotan los errores visibles, para que la figura siga siendo legible.
+    # Solo se anotan las confusiones visibles, para que se siga leyendo.
     for i in range(N_CLASES):
         for j in range(N_CLASES):
             if i != j and normalizada[i, j] >= 0.03:
@@ -596,14 +451,12 @@ def graficar_matriz(reales, predichas, nombre):
 
     plt.xlabel("Clase predicha")
     plt.ylabel("Clase real")
-    plt.title("Matriz de confusion en el conjunto de PRUEBA (12,630 imagenes, 43 clases)\n"
-              "los numeros rojos marcan confusiones del 3% o mas")
+    plt.title("Matriz de confusion en PRUEBA (12,630 imagenes, 43 clases)")
     plt.tight_layout()
-    guardar(nombre)
+    guardar("matriz_confusion.png")
 
 
-def graficar_accuracy_por_clase(reales, predichas, nombre):
-    """Accuracy de cada una de las 43 clases, ordenada de peor a mejor."""
+def graficar_accuracy_por_clase(reales, predichas):
     accs, soportes = [], []
     for clase in range(N_CLASES):
         mascara = reales == clase
@@ -611,96 +464,52 @@ def graficar_accuracy_por_clase(reales, predichas, nombre):
         accs.append((predichas[mascara] == clase).mean() if mascara.sum() else 0.0)
 
     orden = np.argsort(accs)
-    colores = ["tab:red" if accs[i] < 0.90 else "tab:green" for i in orden]
 
     plt.figure(figsize=(9, 12))
-    plt.barh(range(N_CLASES), [accs[i] * 100 for i in orden], color=colores)
+    plt.barh(range(N_CLASES), [accs[i] * 100 for i in orden],
+             color=["tab:red" if accs[i] < 0.90 else "tab:green" for i in orden])
     plt.yticks(range(N_CLASES),
                ["{:>2} {} (n={})".format(i, NOMBRES_CLASES[i][:24], soportes[i]) for i in orden],
                fontsize=8)
-    plt.xlabel("Accuracy en el conjunto de prueba (%)")
+    plt.xlabel("Accuracy en prueba (%)")
     plt.xlim(0, 105)
     plt.axvline(90, color="gray", linestyle="--", alpha=0.7)
-    plt.title("Accuracy por clase, de la peor a la mejor\n(rojo = por debajo del 90%)")
+    plt.title("Accuracy por clase, de la peor a la mejor")
     plt.grid(axis="x", alpha=0.3)
     plt.tight_layout()
-    guardar(nombre)
+    guardar("accuracy_por_clase.png")
 
 
-def graficar_errores(X_test, reales, predichas, probabilidades, nombre):
-    """Muestra los errores en los que el modelo estuvo mas seguro."""
+def graficar_errores(X_test, reales, predichas, probabilidades):
     fallos = np.where(reales != predichas)[0]
-
     if len(fallos) == 0:
         return
 
-    confianza = probabilidades[fallos, predichas[fallos]]
-    peores = fallos[np.argsort(confianza)[::-1][:18]]
+    # Los errores donde el modelo estuvo mas seguro de su respuesta equivocada.
+    peores = fallos[np.argsort(probabilidades[fallos, predichas[fallos]])[::-1][:18]]
 
     fig, ejes = plt.subplots(3, 6, figsize=(15, 8.5))
     for eje, indice in zip(ejes.ravel(), peores):
         eje.imshow(X_test[indice])
-        eje.set_title("real: {}\npredijo: {}\nseguridad {:.0f}%".format(
-            NOMBRES_CLASES[reales[indice]][:20],
-            NOMBRES_CLASES[predichas[indice]][:20],
+        eje.set_title("real: {}\npredijo: {}\n{:.0f}%".format(
+            NOMBRES_CLASES[reales[indice]][:20], NOMBRES_CLASES[predichas[indice]][:20],
             probabilidades[indice, predichas[indice]] * 100), fontsize=7)
         eje.axis("off")
 
     for eje in ejes.ravel()[len(peores):]:
         eje.axis("off")
 
-    plt.suptitle("Los 18 errores con mayor seguridad del modelo\n"
-                 "(casi siempre imagenes muy oscuras, borrosas o de baja resolucion)",
-                 fontsize=12)
+    plt.suptitle("Los 18 errores con mayor seguridad del modelo", fontsize=12)
     plt.tight_layout()
-    guardar(nombre)
+    guardar("errores.png")
 
 
-def graficar_comparacion(resultados, nombre):
-    """Barras comparando MODELO A y MODELO B en validacion y prueba."""
-    etiquetas = ["Validacion", "Prueba"]
-    a = [resultados["A"]["val"]["accuracy"] * 100, resultados["A"]["test"]["accuracy"] * 100]
-    b = [resultados["B"]["val"]["accuracy"] * 100, resultados["B"]["test"]["accuracy"] * 100]
-
-    x = np.arange(len(etiquetas))
-    ancho = 0.36
-
-    fig, ejes = plt.subplots(1, 2, figsize=(13, 5))
-
-    barras_a = ejes[0].bar(x - ancho / 2, a, ancho, label="MODELO A (inicial)", color="tab:red", alpha=0.85)
-    barras_b = ejes[0].bar(x + ancho / 2, b, ancho, label="MODELO B (mejorado)", color="tab:green", alpha=0.85)
-    for barras in (barras_a, barras_b):
-        for barra in barras:
-            ejes[0].text(barra.get_x() + barra.get_width() / 2, barra.get_height() + 0.25,
-                         "{:.2f}%".format(barra.get_height()), ha="center", fontsize=9)
-    ejes[0].set_xticks(x)
-    ejes[0].set_xticklabels(etiquetas)
-    ejes[0].set_ylabel("Accuracy (%)")
-    ejes[0].set_ylim(80, 103)
-    ejes[0].set_title("Accuracy de los dos modelos")
-    # La leyenda va abajo: arriba taparia las etiquetas de las barras.
-    ejes[0].legend(loc="lower center", fontsize=9)
-    ejes[0].grid(axis="y", alpha=0.3)
-
-    brechas = [resultados["A"]["brecha"] * 100, resultados["B"]["brecha"] * 100]
-    barras = ejes[1].bar(["MODELO A", "MODELO B"], brechas,
-                         color=["tab:red", "tab:green"], alpha=0.85, width=0.5)
-    for barra in barras:
-        ejes[1].text(barra.get_x() + barra.get_width() / 2, barra.get_height() + 0.05,
-                     "{:.2f} pp".format(barra.get_height()), ha="center", fontsize=10)
-    ejes[1].set_ylabel("Brecha accuracy entrenamiento - validacion (puntos porcentuales)")
-    ejes[1].set_title("Sobreajuste: cuanto mejor le va al modelo\nen lo que ya vio que en datos nuevos")
-    ejes[1].grid(axis="y", alpha=0.3)
-
-    plt.tight_layout()
-    guardar(nombre)
+# -----------------------------
+# PRINCIPAL
+# -----------------------------
 
 
-# ==============================================================================
-# PROGRAMA PRINCIPAL
-# ==============================================================================
-
-def main():
+if __name__ == "__main__":
     analizador = argparse.ArgumentParser()
     analizador.add_argument("--epocas", type=int, default=30)
     argumentos = analizador.parse_args()
@@ -708,71 +517,51 @@ def main():
     torch.manual_seed(SEMILLA)
     np.random.seed(SEMILLA)
 
-    # ==========================================================================
-    titulo("1. DATOS")
-    # ==========================================================================
-
     X_train, y_train, X_val, y_val, X_test, y_test = preparar_datos.cargar()
-
     media, desviacion = estadisticas(X_train)
 
-    print(" Dataset      : GTSRB - señales de transito alemanas (fotografias reales)")
-    print(" Dispositivo  : {}".format(DISPOSITIVO))
-    print(" Clases       : {}".format(N_CLASES))
-    print(" Resolucion   : 32 x 32 pixeles en color")
-    print("\n {:<34} {:>10}".format("conjunto", "imagenes"))
-    print(" {:<34} {:>10}".format("Entrenamiento", len(X_train)))
-    print(" {:<34} {:>10}".format("Validacion (pistas separadas)", len(X_val)))
-    print(" {:<34} {:>10}".format("Prueba (conjunto oficial GTSRB)", len(X_test)))
-
-    print("\n Normalizacion por canal, calculada solo con entrenamiento:")
-    print("   media      R {:.4f}  G {:.4f}  B {:.4f}".format(*media))
-    print("   desviacion R {:.4f}  G {:.4f}  B {:.4f}".format(*desviacion))
+    print("=" * 80)
+    print(" DATOS")
+    print("=" * 80)
+    print(" Dataset     : GTSRB, señales de transito alemanas (fotografias reales)")
+    print(" Dispositivo :", DISPOSITIVO)
+    print(" Clases      :", N_CLASES, "| Resolucion: 32x32 en color")
+    print("\n Entrenamiento               :", len(X_train))
+    print(" Validacion (pistas aparte)  :", len(X_val))
+    print(" Prueba (conjunto oficial)   :", len(X_test))
+    print("\n Media por canal      : R {:.4f}  G {:.4f}  B {:.4f}".format(*media))
+    print(" Desviacion por canal : R {:.4f}  G {:.4f}  B {:.4f}".format(*desviacion))
 
     cuentas = np.bincount(y_train, minlength=N_CLASES)
-    print("\n Clases con menos ejemplos: ", end="")
-    for clase in np.argsort(cuentas)[:4]:
-        print("{} ({}) ".format(NOMBRES_CLASES[clase][:18], cuentas[clase]), end="")
-    print("\n Clases con mas ejemplos  : ", end="")
-    for clase in np.argsort(cuentas)[::-1][:3]:
-        print("{} ({}) ".format(NOMBRES_CLASES[clase][:18], cuentas[clase]), end="")
-    print()
+    print("\n Clase con menos ejemplos:", NOMBRES_CLASES[np.argmin(cuentas)], "(" + str(cuentas.min()) + ")")
+    print(" Clase con mas ejemplos  :", NOMBRES_CLASES[np.argmax(cuentas)], "(" + str(cuentas.max()) + ")")
 
-    cargador_train_simple = DataLoader(
-        DatasetSenales(X_train, y_train, media, desviacion, aumentar=False),
-        batch_size=LOTE, shuffle=True)
+    cargador_train = DataLoader(DatasetSenales(X_train, y_train, media, desviacion),
+                                batch_size=LOTE, shuffle=True)
     cargador_train_aumentado = DataLoader(
         DatasetSenales(X_train, y_train, media, desviacion, aumentar=True),
         batch_size=LOTE, shuffle=True)
-    cargador_train_eval = DataLoader(
-        DatasetSenales(X_train, y_train, media, desviacion, aumentar=False),
-        batch_size=256, shuffle=False)
-    cargador_val = DataLoader(
-        DatasetSenales(X_val, y_val, media, desviacion, aumentar=False),
-        batch_size=256, shuffle=False)
-    cargador_test = DataLoader(
-        DatasetSenales(X_test, y_test, media, desviacion, aumentar=False),
-        batch_size=256, shuffle=False)
+    cargador_train_eval = DataLoader(DatasetSenales(X_train, y_train, media, desviacion),
+                                     batch_size=256)
+    cargador_val = DataLoader(DatasetSenales(X_val, y_val, media, desviacion), batch_size=256)
+    cargador_test = DataLoader(DatasetSenales(X_test, y_test, media, desviacion), batch_size=256)
 
-    graficar_muestra(X_train, y_train, "muestra_dataset.png")
-    graficar_aumento(X_train, media, desviacion, "aumento_datos.png")
+    graficar_muestra(X_train, y_train)
+    graficar_aumento(X_train)
 
     resultados = {}
 
-    # ==========================================================================
-    titulo("2. MODELO A - APROXIMACION INICIAL")
-    # ==========================================================================
+    # -------------------- modelo A --------------------
+    print("\n" + "=" * 80)
+    print(" MODELO A - APROXIMACION INICIAL")
+    print("=" * 80)
 
     modelo_a = ModeloBase()
-    print(" Arquitectura : CNN de 4 convoluciones + 2 capas densas")
-    print(" Parametros   : {:,}".format(contar_parametros(modelo_a)))
-    print(" Optimizador  : Adam, tasa fija 1e-3")
-    print(" Regularizacion: NINGUNA (sin BatchNorm, sin Dropout, sin weight decay)")
-    print(" Aumento de datos: NO")
+    print(" 4 convoluciones + 2 densas |", format(contar_parametros(modelo_a), ","), "parametros")
+    print(" Adam con tasa fija 1e-3, sin regularizacion y sin aumento de datos.")
 
-    modelo_a, historial_a = entrenar(
-        modelo_a, "MODELO A - inicial, sin regularizar",
-        cargador_train_simple, cargador_val, argumentos.epocas)
+    modelo_a, historial_a = entrenar(modelo_a, "MODELO A - sin regularizar",
+                                     cargador_train, cargador_val, argumentos.epocas)
 
     print("\n Evaluacion del MODELO A:")
     a_train = evaluar(modelo_a, cargador_train_eval, "entrenamiento")
@@ -780,36 +569,28 @@ def main():
     a_test = evaluar(modelo_a, cargador_test, "prueba")
 
     brecha_a = a_train["accuracy"] - a_val["accuracy"]
-    print("\n   Brecha entrenamiento - validacion: {:.2f} puntos porcentuales".format(brecha_a * 100))
-    print("   El modelo llega a {:.2f}% en lo que ya vio y baja a {:.2f}% en datos".format(
-        a_train["accuracy"] * 100, a_val["accuracy"] * 100))
-    print("   nuevos: esta MEMORIZANDO. Ese es el problema que ataca el MODELO B.")
+    print("\n   Brecha entrenamiento - validacion:", round(brecha_a * 100, 2), "puntos porcentuales")
+    print("   Llega al 100% en lo que ya vio: esta memorizando.")
 
     resultados["A"] = {"train": a_train, "val": a_val, "test": a_test, "brecha": brecha_a}
     historial_a["brecha_evaluada"] = brecha_a
 
-    # ==========================================================================
-    titulo("3. MODELO B - VERSION MEJORADA")
-    # ==========================================================================
+    # -------------------- modelo B --------------------
+    print("\n" + "=" * 80)
+    print(" MODELO B - VERSION MEJORADA")
+    print("=" * 80)
 
     modelo_b = ModeloMejorado()
-    print(" Cambios respecto al MODELO A:")
-    print("   1. BatchNorm despues de cada convolucion")
-    print("   2. Dropout creciente (0.2 / 0.3 / 0.4 / 0.5)")
-    print("   3. Un tercer bloque convolucional (32 -> 64 -> 128 canales)")
-    print("   4. Global Average Pooling en vez de aplanar hacia una densa de 512")
-    print("   5. Aumento de datos: rotacion, traslacion, escala, brillo y contraste")
-    print("   6. Weight decay 1e-4 (penalizacion L2 sobre los pesos)")
-    print("   7. Tasa de aprendizaje con decaimiento coseno")
-    print("   8. Early stopping con paciencia de {} epocas".format(PACIENCIA))
-    print("\n Parametros   : {:,}  ({:.1f}x menos que el MODELO A)".format(
-        contar_parametros(modelo_b),
+    print(" Cambios: BatchNorm, dropout creciente, un tercer bloque convolucional,")
+    print(" global average pooling, aumento de datos, weight decay, decaimiento")
+    print(" coseno de la tasa y early stopping.")
+    print("\n", format(contar_parametros(modelo_b), ","), "parametros ({:.1f} veces menos)".format(
         contar_parametros(modelo_a) / contar_parametros(modelo_b)))
 
-    modelo_b, historial_b = entrenar(
-        modelo_b, "MODELO B - mejorado y regularizado",
-        cargador_train_aumentado, cargador_val, argumentos.epocas,
-        tasa=2e-3, weight_decay=1e-4, usar_scheduler=True, early_stopping=True)
+    modelo_b, historial_b = entrenar(modelo_b, "MODELO B - regularizado",
+                                     cargador_train_aumentado, cargador_val, argumentos.epocas,
+                                     tasa=2e-3, weight_decay=1e-4, scheduler=True,
+                                     early_stopping=True)
 
     print("\n Evaluacion del MODELO B:")
     b_train = evaluar(modelo_b, cargador_train_eval, "entrenamiento")
@@ -817,79 +598,55 @@ def main():
     b_test = evaluar(modelo_b, cargador_test, "prueba")
 
     brecha_b = b_train["accuracy"] - b_val["accuracy"]
-    print("\n   Brecha entrenamiento - validacion: {:.2f} puntos porcentuales".format(brecha_b * 100))
+    print("\n   Brecha entrenamiento - validacion:", round(brecha_b * 100, 2), "puntos porcentuales")
 
     resultados["B"] = {"train": b_train, "val": b_val, "test": b_test, "brecha": brecha_b}
     historial_b["brecha_evaluada"] = brecha_b
 
-    # ==========================================================================
-    titulo("4. COMPARACION DE LOS DOS MODELOS")
-    # ==========================================================================
+    # -------------------- comparacion --------------------
+    print("\n" + "=" * 80)
+    print(" COMPARACION")
+    print("=" * 80)
+    print(" {:<34} {:>12} {:>12}".format("", "MODELO A", "MODELO B"))
+    print(" {:<34} {:>12,} {:>12,}".format("Parametros", contar_parametros(modelo_a),
+                                           contar_parametros(modelo_b)))
+    for etiqueta, va, vb in [
+            ("Accuracy entrenamiento (%)", a_train["accuracy"] * 100, b_train["accuracy"] * 100),
+            ("Accuracy validacion (%)", a_val["accuracy"] * 100, b_val["accuracy"] * 100),
+            ("Accuracy PRUEBA (%)", a_test["accuracy"] * 100, b_test["accuracy"] * 100),
+            ("Brecha train - val (pp)", brecha_a * 100, brecha_b * 100)]:
+        print(" {:<34} {:>12.2f} {:>12.2f}".format(etiqueta, va, vb))
+    print(" {:<34} {:>12.4f} {:>12.4f}".format("F1 macro PRUEBA", a_test["f1_macro"], b_test["f1_macro"]))
 
-    print(" {:<38} {:>12} {:>12} {:>10}".format("", "MODELO A", "MODELO B", "cambio"))
-    filas = [
-        ("Parametros entrenables", contar_parametros(modelo_a), contar_parametros(modelo_b), "n"),
-        ("Accuracy entrenamiento (%)", a_train["accuracy"] * 100, b_train["accuracy"] * 100, "f"),
-        ("Accuracy validacion (%)", a_val["accuracy"] * 100, b_val["accuracy"] * 100, "f"),
-        ("Accuracy PRUEBA (%)", a_test["accuracy"] * 100, b_test["accuracy"] * 100, "f"),
-        ("F1 macro PRUEBA", a_test["f1_macro"], b_test["f1_macro"], "f4"),
-        ("Brecha train - val (pp)", brecha_a * 100, brecha_b * 100, "f"),
-    ]
-    for etiqueta, va, vb, tipo in filas:
-        if tipo == "n":
-            print(" {:<38} {:>12,} {:>12,} {:>9.1f}x".format(etiqueta, va, vb, va / vb))
-        elif tipo == "f4":
-            print(" {:<38} {:>12.4f} {:>12.4f} {:>+10.4f}".format(etiqueta, va, vb, vb - va))
-        else:
-            print(" {:<38} {:>12.2f} {:>12.2f} {:>+10.2f}".format(etiqueta, va, vb, vb - va))
-
-    errores_a = int((1 - a_test["accuracy"]) * len(y_test))
-    errores_b = int((1 - b_test["accuracy"]) * len(y_test))
-    print("\n Errores sobre las {:,} imagenes de prueba: {} -> {}  ({:.0f}% menos)".format(
+    errores_a = int(round((1 - a_test["accuracy"]) * len(y_test)))
+    errores_b = int(round((1 - b_test["accuracy"]) * len(y_test)))
+    print("\n Errores sobre las {:,} imagenes de prueba: {} -> {} ({:.0f}% menos)".format(
         len(y_test), errores_a, errores_b, 100 * (errores_a - errores_b) / max(errores_a, 1)))
 
-    # ==========================================================================
-    titulo("5. ANALISIS DETALLADO DEL MODELO FINAL EN PRUEBA")
-    # ==========================================================================
+    # -------------------- analisis final --------------------
+    print("\n" + "=" * 80)
+    print(" REPORTE POR CLASE DEL MODELO FINAL EN PRUEBA")
+    print("=" * 80)
 
     reales, predichas, probabilidades = predecir_conjunto(modelo_b, cargador_test)
-
     print(classification_report(reales, predichas, labels=range(N_CLASES),
                                 target_names=[n[:26] for n in NOMBRES_CLASES],
                                 digits=3, zero_division=0))
 
-    # ==========================================================================
-    titulo("6. GRAFICAS")
-    # ==========================================================================
+    print("=" * 80)
+    print(" GRAFICAS")
+    print("=" * 80)
+    graficar_entrenamiento([historial_a, historial_b])
+    graficar_comparacion(resultados)
+    graficar_matriz(reales, predichas)
+    graficar_accuracy_por_clase(reales, predichas)
+    graficar_errores(X_test, reales, predichas, probabilidades)
 
-    graficar_entrenamiento([historial_a, historial_b], "curvas_entrenamiento.png")
-    graficar_comparacion(resultados, "comparacion_modelos.png")
-    graficar_matriz(reales, predichas, "matriz_confusion.png")
-    graficar_accuracy_por_clase(reales, predichas, "accuracy_por_clase.png")
-    graficar_errores(X_test, reales, predichas, probabilidades, "errores.png")
-
-    # ==========================================================================
-    titulo("7. GUARDADO DEL MODELO")
-    # ==========================================================================
-
-    torch.save({"pesos": modelo_b.state_dict(),
-                "media": media, "desviacion": desviacion,
+    torch.save({"pesos": modelo_b.state_dict(), "media": media, "desviacion": desviacion,
                 "accuracy_prueba": float(b_test["accuracy"])}, RUTA_MODELO)
-    print(" Modelo guardado en modelo_gtsrb.pt ({:.1f} MB)".format(
-        os.path.getsize(RUTA_MODELO) / 1e6))
+    print("\n Modelo guardado en modelo_gtsrb.pt")
 
     with open(RUTA_HISTORIAL, "w") as archivo:
-        json.dump({"A": historial_a, "B": historial_b,
-                   "resumen": {clave: {"accuracy_test": float(r["test"]["accuracy"]),
-                                       "f1_test": float(r["test"]["f1_macro"]),
-                                       "accuracy_val": float(r["val"]["accuracy"]),
-                                       "brecha": float(r["brecha"])}
-                               for clave, r in resultados.items()}}, archivo, indent=2)
-    print(" Historial de entrenamiento guardado en historial.json")
-
-    print("\n Para hacer predicciones desde la consola:  python3 predecir.py")
-    print("\n Listo.")
-
-
-if __name__ == "__main__":
-    main()
+        json.dump({"A": historial_a, "B": historial_b}, archivo, indent=2)
+    print(" Historial guardado en historial.json")
+    print("\n Para hacer predicciones: python3 predecir.py")
